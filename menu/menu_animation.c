@@ -52,6 +52,9 @@ struct menu_animation
    retro_time_t old_time;
 };
 
+typedef float (*easing_cb) (float, float, float, float);
+typedef void  (*tween_cb)  (void);
+
 typedef struct menu_animation menu_animation_t;
 
 static menu_animation_t *menu_animation_get_ptr(void)
@@ -291,7 +294,7 @@ static float easing_out_in_bounce(float t, float b, float c, float d)
 static int menu_animation_iterate(menu_animation_t *anim,
       unsigned idx, float dt, unsigned *active_tweens)
 {
-   struct tween    *tween = anim ? &anim->list[idx] : NULL;
+   struct tween *tween = &anim->list[idx];
 
    if (!tween || !tween->alive)
       return -1;
@@ -377,75 +380,6 @@ static void menu_animation_push_internal(menu_animation_t *anim,
 
    *target = *t;
 }
-
-static void menu_animation_free(void)
-{
-   size_t i;
-   menu_animation_t *anim = menu_animation_get_ptr();
-
-   if (!anim)
-      return;
-
-   for (i = 0; i < anim->size; i++)
-   {
-      if (anim->list[i].subject)
-         anim->list[i].subject = NULL;
-   }
-
-   free(anim->list);
-
-   memset(anim, 0, sizeof(menu_animation_t));
-}
-
-void menu_animation_kill_by_subject(size_t count, const void *subjects)
-{
-   unsigned i, j, killed = 0;
-   float **sub = (float**)subjects;
-   menu_animation_t *anim = menu_animation_get_ptr();
-
-   for (i = 0; i < anim->size; ++i)
-   {
-      if (!anim->list[i].alive)
-         continue;
-
-      for (j = 0; j < count; ++j)
-      {
-         if (anim->list[i].subject == sub[j])
-         {
-            anim->list[i].alive   = false;
-            anim->list[i].subject = NULL;
-
-            if (i < anim->first_dead)
-               anim->first_dead = i;
-
-            killed++;
-            break;
-         }
-      }
-   }
-}
-
-void menu_animation_kill_by_tag(int tag)
-{
-   unsigned i;
-   menu_animation_t *anim = menu_animation_get_ptr();
-
-   if (tag == -1)
-      return;
-
-   for (i = 0; i < anim->size; ++i)
-   {
-      if (anim->list[i].tag == tag)
-      {
-         anim->list[i].alive   = false;
-         anim->list[i].subject = NULL;
-
-         if (i < anim->first_dead)
-            anim->first_dead = i;
-      }
-   }
-}
-
 
 bool menu_animation_push(float duration, float target_value, float* subject,
       enum menu_animation_easing_type easing_enum, int tag, tween_cb cb)
@@ -588,44 +522,6 @@ bool menu_animation_push(float duration, float target_value, float* subject,
    return true;
 }
 
-/**
- * menu_animation_ticker_str:
- * @s                        : buffer to write new message line to.
- * @len                      : length of buffer @input.
- * @idx                      : Index. Will be used for ticker logic.
- * @str                      : Input string.
- * @selected                 : Is the item currently selected in the menu?
- *
- * Take the contents of @str and apply a ticker effect to it,
- * and write the results in @s.
- **/
-void menu_animation_ticker_str(char *s, size_t len, uint64_t idx,
-      const char *str, bool selected)
-{
-   menu_animation_t *anim = menu_animation_get_ptr();
-   size_t           str_len = utf8len(str);
-   size_t           offset = 0;
-
-   if ((size_t)str_len <= len)
-   {
-      utf8cpy(s, PATH_MAX_LENGTH, str, len);
-      return;
-   }
-
-   if (!selected)
-   {
-      utf8cpy(s, PATH_MAX_LENGTH, str, len-3);
-      strlcat(s, "...", PATH_MAX_LENGTH);
-      return;
-   }
-
-   menu_animation_ticker_generic(idx, len, &offset, &str_len);
-
-   utf8cpy(s, PATH_MAX_LENGTH, utf8skip(str, offset), str_len);
-
-   anim->is_active = true;
-}
-
 bool menu_animation_ctl(enum menu_animation_ctl_state state, void *data)
 {
    menu_animation_t *anim   = menu_animation_get_ptr();
@@ -636,7 +532,21 @@ bool menu_animation_ctl(enum menu_animation_ctl_state state, void *data)
    switch (state)
    {
       case MENU_ANIMATION_CTL_DEINIT:
-         menu_animation_free();
+         {
+            size_t i;
+            if (!anim)
+               return false;
+
+            for (i = 0; i < anim->size; i++)
+            {
+               if (anim->list[i].subject)
+                  anim->list[i].subject = NULL;
+            }
+
+            free(anim->list);
+
+            memset(anim, 0, sizeof(menu_animation_t));
+         }
          break;
       case MENU_ANIMATION_CTL_IS_ACTIVE:
          return anim->is_active;
@@ -685,8 +595,11 @@ bool menu_animation_ctl(enum menu_animation_ctl_state state, void *data)
             if (!dt)
                return false;
 
-            for(i = 0; i < anim->size; i++)
-               menu_animation_iterate(anim, i, *dt, &active_tweens);
+            if (anim)
+            {
+               for(i = 0; i < anim->size; i++)
+                  menu_animation_iterate(anim, i, *dt, &active_tweens);
+            }
 
             if (!active_tweens)
             {
@@ -698,8 +611,96 @@ bool menu_animation_ctl(enum menu_animation_ctl_state state, void *data)
             anim->is_active = true;
          }
          break;
-      default:
+      case MENU_ANIMATION_CTL_KILL_BY_TAG:
+         {
+            unsigned i;
+            menu_animation_ctx_tag_t *tag = (menu_animation_ctx_tag_t*)data;
+
+            if (!tag || tag->id == -1)
+               return false;
+
+            for (i = 0; i < anim->size; ++i)
+            {
+               if (anim->list[i].tag != tag->id)
+                  continue;
+
+               anim->list[i].alive   = false;
+               anim->list[i].subject = NULL;
+
+               if (i < anim->first_dead)
+                  anim->first_dead = i;
+            }
+         }
+         break;
+      case MENU_ANIMATION_CTL_KILL_BY_SUBJECT:
+         {
+            unsigned i, j,  killed = 0;
+            menu_animation_ctx_subject_t *subject = 
+               (menu_animation_ctx_subject_t*)data;
+            float            **sub = (float**)subject->data;
+
+            for (i = 0; i < anim->size; ++i)
+            {
+               if (!anim->list[i].alive)
+                  continue;
+
+               for (j = 0; j < subject->count; ++j)
+               {
+                  if (anim->list[i].subject != sub[j])
+                     continue;
+
+                  anim->list[i].alive   = false;
+                  anim->list[i].subject = NULL;
+
+                  if (i < anim->first_dead)
+                     anim->first_dead = i;
+
+                  killed++;
+                  break;
+               }
+            }
+         }
+         break;
+      case MENU_ANIMATION_CTL_TICKER:
+         {
+            menu_animation_ctx_ticker_t *ticker = (menu_animation_ctx_ticker_t*)
+               data;
+            size_t           str_len = utf8len(ticker->str);
+            size_t           offset  = 0;
+
+            if ((size_t)str_len <= ticker->len)
+            {
+               utf8cpy(ticker->s,
+                     PATH_MAX_LENGTH,
+                     ticker->str,
+                     ticker->len);
+               return true;
+            }
+
+            if (!ticker->selected)
+            {
+               utf8cpy(ticker->s, PATH_MAX_LENGTH, ticker->str, ticker->len - 3);
+               strlcat(ticker->s, "...", PATH_MAX_LENGTH);
+               return true;
+            }
+
+            menu_animation_ticker_generic(
+                  ticker->idx,
+                  ticker->len,
+                  &offset,
+                  &str_len);
+
+            utf8cpy(
+                  ticker->s,
+                  PATH_MAX_LENGTH,
+                  utf8skip(ticker->str, offset),
+                  str_len);
+
+            anim->is_active = true;
+         }
+         break;
       case MENU_ANIMATION_CTL_NONE:
+      default:
          break;
    }
 

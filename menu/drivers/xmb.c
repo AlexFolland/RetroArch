@@ -592,7 +592,8 @@ static void xmb_selection_pointer_changed(
       xmb_handle_t *xmb, bool allow_animations)
 {
    size_t skip;
-   unsigned i, end, tag, height, depth;
+   unsigned i, end, height, depth;
+   menu_animation_ctx_tag_t tag;
    size_t selection, num      = 0;
    int threshold              = 0;
    menu_list_t     *menu_list = NULL;
@@ -607,12 +608,13 @@ static void xmb_selection_pointer_changed(
       return;
 
    end       = menu_entries_get_end();
-   tag       = (uintptr_t)menu_list;
    threshold = xmb->icon.size*10;
 
    video_driver_get_size(NULL, &height);
 
-   menu_animation_kill_by_tag(tag);
+   tag.id    = (uintptr_t)menu_list;
+
+   menu_animation_ctl(MENU_ANIMATION_CTL_KILL_BY_TAG, &tag);
    menu_entries_ctl(MENU_ENTRIES_CTL_SET_START, &num);
    skip = 0;
 
@@ -657,13 +659,13 @@ static void xmb_selection_pointer_changed(
       else
       {
          menu_animation_push(XMB_DELAY, ia, &node->alpha,
-               EASING_IN_OUT_QUAD, tag, NULL);
+               EASING_IN_OUT_QUAD, tag.id, NULL);
          menu_animation_push(XMB_DELAY, ia, &node->label_alpha,
-               EASING_IN_OUT_QUAD, tag, NULL);
+               EASING_IN_OUT_QUAD, tag.id, NULL);
          menu_animation_push(XMB_DELAY, iz, &node->zoom,
-               EASING_IN_OUT_QUAD, tag, NULL);
+               EASING_IN_OUT_QUAD, tag.id, NULL);
          menu_animation_push(XMB_DELAY, iy, &node->y,
-               EASING_IN_OUT_QUAD, tag, NULL);
+               EASING_IN_OUT_QUAD, tag.id, NULL);
       }
    }
 
@@ -1370,11 +1372,12 @@ static void xmb_draw_items(xmb_handle_t *xmb,
       size_t current, size_t cat_selection_ptr, float *color,
       unsigned width, unsigned height)
 {
-   uint64_t *frame_count;
+   menu_animation_ctx_ticker_t ticker;
    size_t i;
    unsigned ticker_limit;
    math_matrix_4x4 mymat;
    menu_display_ctx_rotate_draw_t rotate_draw;
+   uint64_t *frame_count       = NULL;
    xmb_node_t *core_node       = NULL;
    size_t end                  = 0;
    settings_t   *settings      = config_get_ptr();
@@ -1552,9 +1555,13 @@ static void xmb_draw_items(xmb_handle_t *xmb,
             ticker_limit = 70;
       }
 
-      menu_animation_ticker_str(name, ticker_limit,
-            *frame_count / 20, entry.path,
-            (i == current));
+      ticker.s        = name;
+      ticker.len      = ticker_limit;
+      ticker.idx      = *frame_count / 20;
+      ticker.str      = entry.path;
+      ticker.selected = (i == current);
+
+      menu_animation_ctl(MENU_ANIMATION_CTL_TICKER, &ticker);
 
       xmb_draw_text(xmb, name,
             node->x + xmb->margins.screen.left + 
@@ -1563,10 +1570,13 @@ static void xmb_draw_items(xmb_handle_t *xmb,
             1, node->label_alpha, TEXT_ALIGN_LEFT,
             width, height);
 
-      menu_animation_ticker_str(value, 35,
-            *frame_count / 20, entry.value,
-            (i == current));
+      ticker.s        = value;
+      ticker.len      = 35;
+      ticker.idx      = *frame_count / 20;
+      ticker.str      = entry.value;
+      ticker.selected = (i == current);
 
+      menu_animation_ctl(MENU_ANIMATION_CTL_TICKER, &ticker);
 
       if (do_draw_text)
          xmb_draw_text(xmb, value,
@@ -2475,7 +2485,8 @@ static void xmb_list_clear(file_list_t *list)
 
    for (i = 0; i < size; ++i)
    {
-      float *subjects[5];
+      menu_animation_ctx_subject_t subject;
+      float *subjects[5] = {NULL};
       xmb_node_t *node = (xmb_node_t*)
          menu_entries_get_userdata_at_offset(list, i);
 
@@ -2488,7 +2499,10 @@ static void xmb_list_clear(file_list_t *list)
       subjects[3] = &node->x;
       subjects[4] = &node->y;
 
-      menu_animation_kill_by_subject(5, subjects);
+      subject.count = 5;
+      subject.data  = subjects;
+
+      menu_animation_ctl(MENU_ANIMATION_CTL_KILL_BY_SUBJECT, &subject);
 
       file_list_free_userdata(list, i);
    }
@@ -2506,15 +2520,19 @@ static void xmb_list_deep_copy(const file_list_t *src, file_list_t *dst)
 
       if (node)
       {
-         float *subjects[5];
+         menu_animation_ctx_subject_t subject;
+         float *subjects[5] = {NULL};
 
-         subjects[0] = &node->alpha;
-         subjects[1] = &node->label_alpha;
-         subjects[2] = &node->zoom;
-         subjects[3] = &node->x;
-         subjects[4] = &node->y;
+         subjects[0]   = &node->alpha;
+         subjects[1]   = &node->label_alpha;
+         subjects[2]   = &node->zoom;
+         subjects[3]   = &node->x;
+         subjects[4]   = &node->y;
 
-         menu_animation_kill_by_subject(5, subjects);
+         subject.count = 5;
+         subject.data  = subjects;
+
+         menu_animation_ctl(MENU_ANIMATION_CTL_KILL_BY_SUBJECT, &subject);
       }
 
       file_list_free_userdata(dst, i);
