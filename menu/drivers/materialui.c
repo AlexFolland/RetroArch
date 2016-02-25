@@ -686,7 +686,7 @@ static void mui_draw_cursor(mui_handle_t *mui,
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
 }
 
-static size_t mui_list_get_size(void *data, menu_list_type_t type)
+static size_t mui_list_get_size(void *data, enum menu_list_type type)
 {
    size_t list_size = 0;
    (void)data;
@@ -1171,8 +1171,7 @@ static void mui_context_destroy(void *data)
    mui_context_bg_destroy(mui);
 }
 
-static bool mui_load_image(void *userdata, void *data,
-      menu_image_type_t type)
+static bool mui_load_image(void *userdata, void *data, enum menu_image_type type)
 {
    mui_handle_t *mui = (mui_handle_t*)userdata;
 
@@ -1292,7 +1291,7 @@ static void mui_context_reset(void *data)
          menu_display_handle_wallpaper_upload, NULL);
 }
 
-static int mui_environ(menu_environ_cb_t type, void *data, void *userdata)
+static int mui_environ(enum menu_environ_cb type, void *data, void *userdata)
 {
    switch (type)
    {
@@ -1345,7 +1344,8 @@ static void mui_preswitch_tabs(mui_handle_t *mui, unsigned action)
    }
 }
 
-static void mui_list_cache(void *data, menu_list_type_t type, unsigned action)
+static void mui_list_cache(void *data,
+      enum menu_list_type type, unsigned action)
 {
    size_t list_size;
    mui_handle_t *mui   = (mui_handle_t*)data;

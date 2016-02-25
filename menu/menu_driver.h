@@ -58,21 +58,21 @@ extern "C" {
 
 #define MENU_KEYBOARD_BIND_TIMEOUT_SECONDS 5
 
-typedef enum
+enum menu_image_type
 {
    MENU_IMAGE_NONE = 0,
    MENU_IMAGE_WALLPAPER,
    MENU_IMAGE_BOXART
-} menu_image_type_t;
+};
 
-typedef enum
+enum menu_environ_cb
 {
    MENU_ENVIRON_NONE = 0,
    MENU_ENVIRON_RESET_HORIZONTAL_LIST,
    MENU_ENVIRON_LAST
-} menu_environ_cb_t;
+};
 
-typedef enum
+enum menu_help_type
 {
    MENU_HELP_NONE       = 0,
    MENU_HELP_WELCOME,
@@ -85,7 +85,7 @@ typedef enum
    MENU_HELP_AUDIO_VIDEO_TROUBLESHOOTING,
    MENU_HELP_SCANNING_CONTENT,
    MENU_HELP_LAST
-} menu_help_type_t;
+};
 
 enum menu_state_changes
 {
@@ -174,7 +174,7 @@ enum rarch_menu_ctl_state
    RARCH_MENU_CTL_BIND_INIT
 };
 
-typedef enum
+enum menu_file_type
 {
    MENU_FILE_NONE = 0,
    MENU_FILE_PLAIN,
@@ -239,9 +239,9 @@ typedef enum
    MENU_SETTING_HORIZONTAL_MENU,
    MENU_INFO_MESSAGE,
    MENU_FILE_TYPE_T_LAST
-} menu_file_type_t;
+};
 
-typedef enum
+enum menu_settings_type
 {
    MENU_SETTINGS_NONE       = MENU_FILE_TYPE_T_LAST + 1,
    MENU_SETTINGS_SHADER_PARAMETER_0,
@@ -276,13 +276,13 @@ typedef enum
    MENU_SETTINGS_INPUT_DESC_BEGIN,
    MENU_SETTINGS_INPUT_DESC_END = MENU_SETTINGS_INPUT_DESC_BEGIN + (MAX_USERS * (RARCH_FIRST_CUSTOM_BIND + 4)),
    MENU_SETTINGS_LAST
-} menu_settings_t;
+};
 
 typedef struct
 {
    bool push_help_screen;
-   unsigned         help_screen_id;
-   menu_help_type_t help_screen_type;
+   unsigned            help_screen_id;
+   enum menu_help_type help_screen_type;
 
    bool defer_core;
    char deferred_path[PATH_MAX_LENGTH];
@@ -331,19 +331,19 @@ typedef struct menu_ctx_driver
          file_list_t *list, const char *, const char *, size_t);
    void  (*list_free)(file_list_t *list, size_t, size_t);
    void  (*list_clear)(file_list_t *list);
-   void  (*list_cache)(void *data, menu_list_type_t, unsigned);
+   void  (*list_cache)(void *data, enum menu_list_type, unsigned);
    int   (*list_push)(void *data, void *userdata, menu_displaylist_info_t*, unsigned);
    size_t(*list_get_selection)(void *data);
-   size_t(*list_get_size)(void *data, menu_list_type_t type);
-   void *(*list_get_entry)(void *data, menu_list_type_t type, unsigned i);
+   size_t(*list_get_size)(void *data, enum menu_list_type type);
+   void *(*list_get_entry)(void *data, enum menu_list_type type, unsigned i);
    void  (*list_set_selection)(void *data, file_list_t *list);
    int   (*bind_init)(menu_file_list_cbs_t *cbs,
          const char *path, const char *label, unsigned type, size_t idx,
          const char *elem0, const char *elem1,
          uint32_t label_hash, uint32_t menu_label_hash);
-   bool  (*load_image)(void *userdata, void *data, menu_image_type_t type);
+   bool  (*load_image)(void *userdata, void *data, enum menu_image_type type);
    const char *ident;
-   int (*environ_cb)(menu_environ_cb_t type, void *data, void *userdata);
+   int (*environ_cb)(enum menu_environ_cb type, void *data, void *userdata);
    int (*pointer_tap)(void *data, unsigned x, unsigned y, unsigned ptr,
          menu_file_list_cbs_t *cbs,
          menu_entry_t *entry, unsigned action);
@@ -352,7 +352,7 @@ typedef struct menu_ctx_driver
 typedef struct menu_ctx_load_image
 {
    void *data;
-   menu_image_type_t type;
+   enum menu_image_type type;
 } menu_ctx_load_image_t;
 
 typedef struct menu_ctx_list
@@ -362,7 +362,7 @@ typedef struct menu_ctx_list
    const char *path;
    const char *label;
    size_t idx;
-   menu_list_type_t type;
+   enum menu_list_type type;
    unsigned action;
    size_t selection;
    size_t size;
@@ -382,7 +382,7 @@ typedef struct menu_ctx_iterate
 
 typedef struct menu_ctx_environment
 {
-   menu_environ_cb_t type;
+   enum menu_environ_cb type;
    void *data;
 } menu_ctx_environment_t;
 
