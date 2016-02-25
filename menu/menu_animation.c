@@ -17,6 +17,7 @@
 #include <math.h>
 #include <string.h>
 #include <compat/strl.h>
+#include <encodings/utf.h>
 #include <retro_miscellaneous.h>
 
 #include "menu_animation.h"
@@ -602,25 +603,25 @@ void menu_animation_ticker_str(char *s, size_t len, uint64_t idx,
       const char *str, bool selected)
 {
    menu_animation_t *anim = menu_animation_get_ptr();
-   size_t           str_len = strlen(str);
+   size_t           str_len = utf8len(str);
    size_t           offset = 0;
 
    if ((size_t)str_len <= len)
    {
-      strlcpy(s, str, len + 1);
+      utf8cpy(s, PATH_MAX_LENGTH, str, len);
       return;
    }
 
    if (!selected)
    {
-      strlcpy(s, str, len + 1 - 3);
-      strlcat(s, "...", len + 1);
+      utf8cpy(s, PATH_MAX_LENGTH, str, len-3);
+      strlcat(s, "...", PATH_MAX_LENGTH);
       return;
    }
 
    menu_animation_ticker_generic(idx, len, &offset, &str_len);
 
-   strlcpy(s, str + offset, str_len + 1);
+   utf8cpy(s, PATH_MAX_LENGTH, utf8skip(str, offset), str_len);
 
    anim->is_active = true;
 }

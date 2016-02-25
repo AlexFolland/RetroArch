@@ -663,8 +663,8 @@ static int menu_input_key_bind_set_mode_common(
          strlcpy(info.label,
                menu_hash_to_str(MENU_LABEL_CUSTOM_BIND), sizeof(info.label));
 
-         if (menu_displaylist_push_list(&info, DISPLAYLIST_INFO) == 0)
-            menu_displaylist_push_list_process(&info);
+         if (menu_displaylist_ctl(DISPLAYLIST_INFO, &info))
+            menu_displaylist_ctl(DISPLAYLIST_PROCESS, &info);
          break;
       case MENU_INPUT_BIND_ALL:
          menu_input->binds.target = &settings->input.binds
@@ -679,8 +679,8 @@ static int menu_input_key_bind_set_mode_common(
                menu_hash_to_str(MENU_LABEL_CUSTOM_BIND_ALL),
                sizeof(info.label));
 
-         if (menu_displaylist_push_list(&info, DISPLAYLIST_INFO) == 0)
-            menu_displaylist_push_list_process(&info);
+         if (menu_displaylist_ctl(DISPLAYLIST_INFO, &info))
+            menu_displaylist_ctl(DISPLAYLIST_PROCESS, &info);
          break;
    }
 

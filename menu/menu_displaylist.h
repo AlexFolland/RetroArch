@@ -22,8 +22,6 @@
 #include <retro_miscellaneous.h>
 #include <file/file_list.h>
 
-#include "menu_setting.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -47,7 +45,7 @@ enum
    PARSE_SUB_GROUP      = (1 << 10)
 };
 
-enum
+enum menu_displaylist_ctl_state
 {
    DISPLAYLIST_NONE = 0,
    DISPLAYLIST_INFO,
@@ -114,7 +112,9 @@ enum
    DISPLAYLIST_SCAN_DIRECTORY_LIST,
    DISPLAYLIST_ARCHIVE_ACTION,
    DISPLAYLIST_ARCHIVE_ACTION_DETECT_CORE,
-   DISPLAYLIST_CORE_CONTENT
+   DISPLAYLIST_CORE_CONTENT,
+   DISPLAYLIST_PROCESS,
+   DISPLAYLIST_PUSH_ONTO_STACK
 };
 
 typedef struct menu_displaylist_info
@@ -136,11 +136,13 @@ typedef struct menu_displaylist_info
    rarch_setting_t *setting;
 } menu_displaylist_info_t;
 
-int menu_displaylist_push_list(menu_displaylist_info_t *info, unsigned type);
+typedef struct menu_displaylist_ctx_entry
+{
+   file_list_t *stack;
+   file_list_t *list;
+} menu_displaylist_ctx_entry_t;
 
-void menu_displaylist_push_list_process(menu_displaylist_info_t *info);
-
-int menu_displaylist_push(file_list_t *list, file_list_t *menu_list);
+bool menu_displaylist_ctl(enum menu_displaylist_ctl_state type, void *data);
 
 int menu_displaylist_parse_settings(void *data, menu_displaylist_info_t *info, 
       const char *info_label, unsigned parse_type, bool add_empty_entry);
