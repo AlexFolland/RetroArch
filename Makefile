@@ -7,7 +7,7 @@ endif
 
 include config.mk
 
-TARGET = retroarch
+TARGET = retroarch-lex
 
 OBJDIR := obj-unix
 
@@ -120,9 +120,9 @@ config.mk: configure qb/*
 	@echo "config.mk is outdated or non-existing. Run ./configure again."
 	@exit 1
 
-retroarch: $(RARCH_OBJ)
+retroarch-lex: $(RARCH_OBJ)
 	@$(if $(Q), $(shell echo echo LD $@),)
-	$(Q)$(LINK) -o $@ $(RARCH_OBJ) $(LIBS) $(LDFLAGS) $(LIBRARY_DIRS)
+	$(Q)$(LINK) -o ../$@ $(RARCH_OBJ) $(LIBS) $(LDFLAGS) $(LIBRARY_DIRS)
 
 $(OBJDIR)/%.o: %.c config.h config.mk
 	@mkdir -p $(dir $@)
