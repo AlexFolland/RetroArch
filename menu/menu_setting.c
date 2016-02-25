@@ -2542,14 +2542,9 @@ static int setting_action_right_bind_device(void *data, bool wraparound)
 
 static int setting_action_ok_bind_all(void *data, bool wraparound)
 {
-   global_t      *global     = global_get_ptr();
    (void)wraparound;
-
-   if (!global)
+   if (!menu_input_ctl(MENU_INPUT_CTL_BIND_ALL, data))
       return -1;
-
-   menu_input_key_bind_set_mode(data, MENU_INPUT_BIND_ALL);
-
    return 0;
 }
 
@@ -2577,17 +2572,17 @@ static int setting_action_ok_bind_all_save_autoconfig(void *data, bool wraparoun
 static int setting_action_ok_bind_defaults(void *data, bool wraparound)
 {
    unsigned i;
-   struct retro_keybind *target = NULL;
+   struct retro_keybind *target          = NULL;
    const struct retro_keybind *def_binds = NULL;
-   rarch_setting_t *setting  = (rarch_setting_t*)data;
-   settings_t    *settings   = config_get_ptr();
+   rarch_setting_t *setting              = (rarch_setting_t*)data;
+   settings_t    *settings               = config_get_ptr();
 
    (void)wraparound;
 
    if (!setting)
       return -1;
 
-   target = (struct retro_keybind*)
+   target    = (struct retro_keybind*)
       &settings->input.binds[setting->index_offset][0];
    def_binds =  (setting->index_offset) ? 
       retro_keybinds_rest : retro_keybinds_1;
@@ -2601,8 +2596,8 @@ static int setting_action_ok_bind_defaults(void *data, bool wraparound)
    for (i = MENU_SETTINGS_BIND_BEGIN;
          i <= MENU_SETTINGS_BIND_LAST; i++, target++)
    {
-      target->key = def_binds[i - MENU_SETTINGS_BIND_BEGIN].key;
-      target->joykey = NO_BTN;
+      target->key     = def_binds[i - MENU_SETTINGS_BIND_BEGIN].key;
+      target->joykey  = NO_BTN;
       target->joyaxis = AXIS_NONE;
    }
 
@@ -2637,6 +2632,7 @@ static int setting_action_ok_video_refresh_rate_auto(void *data, bool wraparound
 
 static int setting_generic_action_ok_linefeed(void *data, bool wraparound)
 {
+   menu_input_ctx_line_t line;
    input_keyboard_line_complete_t cb = NULL;
    rarch_setting_t      *setting = (rarch_setting_t*)data;
    const char *short_description = menu_setting_get_short_description(setting);
@@ -2649,21 +2645,27 @@ static int setting_generic_action_ok_linefeed(void *data, bool wraparound)
    switch (menu_setting_get_type(setting))
    {
       case ST_UINT:
-         cb = menu_input_st_uint_callback;
+         cb = menu_input_st_uint_cb;
          break;
       case ST_HEX:
-         cb = menu_input_st_hex_callback;
+         cb = menu_input_st_hex_cb;
          break;
       case ST_STRING:
       case ST_STRING_OPTIONS:
-         cb = menu_input_st_string_callback;
+         cb = menu_input_st_string_cb;
          break;
       default:
          break;
    }
 
-   menu_input_key_start_line(short_description,
-         setting->name, 0, 0, cb);
+   line.label         = short_description;
+   line.label_setting = setting->name;
+   line.type          = 0;
+   line.idx           = 0;
+   line.cb            = cb;
+
+   if (!menu_input_ctl(MENU_INPUT_CTL_START_LINE, &line))
+      return -1;
 
    return 0;
 }
@@ -2686,12 +2688,10 @@ static int setting_action_action_ok(void *data, bool wraparound)
 static int setting_bind_action_ok(void *data, bool wraparound)
 {
    (void)wraparound;
-
-   menu_input_key_bind_set_mode(data, MENU_INPUT_BIND_SINGLE);
-
+   if (!menu_input_ctl(MENU_INPUT_CTL_BIND_SINGLE, data))
+      return -1;
    return 0;
 }
-
 
 static void get_string_representation_bind_device(void * data, char *s,
       size_t len)
