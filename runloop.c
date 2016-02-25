@@ -1390,35 +1390,46 @@ int runloop_iterate(unsigned *sleep_ms)
 
 
 #ifdef HAVE_MENU
-   if (menu_driver_ctl(RARCH_MENU_CTL_IS_ALIVE, NULL))
+   static retro_usec_t menu_time_last          = 0;
+   static retro_time_t menu_limit_minimum_time = 0.0;
+   static float menu_fps = 0.0f;
+   float menu_fps = (settings->menu_fps > 0.0f) ? settings->menu_fps : 60.0f;
+   menu_limit_minimum_time = (retro_time_t)roundf(1000000.0f / menu_fps);
+   if current - menu_time_last > menu_limit_minimum_time;
    {
-      menu_ctx_iterate_t iter;
-      bool focused            = runloop_ctl(RUNLOOP_CTL_CHECK_FOCUS, NULL) 
-         && !ui_companion_is_on_foreground();
-      bool is_idle            = runloop_ctl(RUNLOOP_CTL_IS_IDLE, NULL);
-      enum menu_action action = (enum menu_action)
-               menu_input_frame_retropad(cmd.state[0], cmd.state[2]);
+	   if (menu_driver_ctl(RARCH_MENU_CTL_IS_ALIVE, NULL))
+	   {
+		  menu_time_last = current;
+		  menu_ctx_iterate_t iter;
+		  bool focused            = runloop_ctl(RUNLOOP_CTL_CHECK_FOCUS, NULL) 
+			 && !ui_companion_is_on_foreground();
+		  bool is_idle            = runloop_ctl(RUNLOOP_CTL_IS_IDLE, NULL);
+		  enum menu_action action = (enum menu_action)
+				   menu_input_frame_retropad(cmd.state[0], cmd.state[2]);
 
-      iter.action = action;
+		  iter.action = action;
 
-      if (!menu_driver_ctl(RARCH_MENU_CTL_ITERATE, &iter))
-         rarch_ctl(RARCH_CTL_MENU_RUNNING_FINISHED, NULL);
+		  if (!menu_driver_ctl(RARCH_MENU_CTL_ITERATE, &iter))
+			 rarch_ctl(RARCH_CTL_MENU_RUNNING_FINISHED, NULL);
 
-      if (focused || !is_idle)
-         menu_driver_ctl(RARCH_MENU_CTL_RENDER, NULL);
+		  if (focused || !is_idle)
+			 menu_driver_ctl(RARCH_MENU_CTL_RENDER, NULL);
 
-      if (!focused || is_idle)
-      {
-         *sleep_ms = 10;
-         return 1;
-      }
+		  if (!focused || is_idle)
+		  {
+			 *sleep_ms = 10;
+			 return 1;
+		  }
 
-      if (!settings->menu.throttle_framerate)
-      {
-         if (!settings->fastforward_ratio)
-            return 0;
-      }
-      goto end;
+		  /*
+		  if (!settings->menu.throttle_framerate)
+		  {
+			 if (!settings->fastforward_ratio)
+				return 0;
+		  }
+		  */
+		  goto end;
+	   }
    }
 #endif
 
