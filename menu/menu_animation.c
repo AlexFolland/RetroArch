@@ -24,6 +24,8 @@
 #include "../configuration.h"
 #include "../performance.h"
 
+#define IDEAL_DELTA_TIME (1.0 / 60.0 * 1000000.0)
+
 struct tween
 {
    bool        alive;
@@ -44,24 +46,12 @@ struct menu_animation
    size_t capacity;
    size_t size;
    size_t first_dead;
-   bool is_active;
-
-   /* Delta timing */
-   float delta_time;
-   retro_time_t cur_time;
-   retro_time_t old_time;
 };
 
 typedef float (*easing_cb) (float, float, float, float);
 typedef void  (*tween_cb)  (void);
 
 typedef struct menu_animation menu_animation_t;
-
-static menu_animation_t *menu_animation_get_ptr(void)
-{
-   static menu_animation_t menu_animation_state;
-   return &menu_animation_state;
-}
 
 /* from https://github.com/kikito/tween.lua/blob/master/tween.lua */
 
@@ -381,25 +371,26 @@ static void menu_animation_push_internal(menu_animation_t *anim,
    *target = *t;
 }
 
-bool menu_animation_push(float duration, float target_value, float* subject,
-      enum menu_animation_easing_type easing_enum, int tag, tween_cb cb)
+static bool menu_animation_push(menu_animation_t *anim, void *data)
 {
    struct tween t;
-   menu_animation_t *anim = menu_animation_get_ptr();
+   menu_animation_ctx_entry_t *entry = 
+      (menu_animation_ctx_entry_t*)data;
 
-   if (!subject)
+   if (!entry || !entry->subject)
       return false;
 
    t.alive         = true;
-   t.duration      = duration;
+   t.duration      = entry->duration;
    t.running_since = 0;
-   t.initial_value = *subject;
-   t.target_value  = target_value;
-   t.subject       = subject;
-   t.tag           = tag;
-   t.cb            = cb;
+   t.initial_value = *entry->subject;
+   t.target_value  = entry->target_value;
+   t.subject       = entry->subject;
+   t.tag           = entry->tag;
+   t.cb            = entry->cb;
+   t.easing        = NULL;
 
-   switch (easing_enum)
+   switch (entry->easing_enum)
    {
       case EASING_LINEAR:
          t.easing        = &easing_linear;
@@ -509,7 +500,6 @@ bool menu_animation_push(float duration, float target_value, float* subject,
          t.easing        = &easing_out_in_bounce;
          break;
       default:
-         t.easing        = NULL;
          break;
    }
 
@@ -522,46 +512,49 @@ bool menu_animation_push(float duration, float target_value, float* subject,
    return true;
 }
 
+
 bool menu_animation_ctl(enum menu_animation_ctl_state state, void *data)
 {
-   menu_animation_t *anim   = menu_animation_get_ptr();
-
-   if (!anim)
-      return false;
+   static menu_animation_t anim;
+   static retro_time_t cur_time    = 0;
+   static retro_time_t old_time    = 0;
+   static float delta_time         = 0.0f;
+   static bool animation_is_active = false;
 
    switch (state)
    {
       case MENU_ANIMATION_CTL_DEINIT:
          {
             size_t i;
-            if (!anim)
-               return false;
 
-            for (i = 0; i < anim->size; i++)
+            for (i = 0; i < anim.size; i++)
             {
-               if (anim->list[i].subject)
-                  anim->list[i].subject = NULL;
+               if (anim.list[i].subject)
+                  anim.list[i].subject = NULL;
             }
 
-            free(anim->list);
+            free(anim.list);
 
-            memset(anim, 0, sizeof(menu_animation_t));
+            memset(&anim, 0, sizeof(menu_animation_t));
          }
+         cur_time                  = 0;
+         old_time                  = 0;
+         delta_time                = 0.0f;
          break;
       case MENU_ANIMATION_CTL_IS_ACTIVE:
-         return anim->is_active;
+         return animation_is_active;
       case MENU_ANIMATION_CTL_CLEAR_ACTIVE:
-         anim->is_active           = false;
+         animation_is_active       = false;
          break;
       case MENU_ANIMATION_CTL_SET_ACTIVE:
-         anim->is_active           = true;
+         animation_is_active       = true;
          break;
       case MENU_ANIMATION_CTL_DELTA_TIME:
          {
             float *ptr = (float*)data;
             if (!ptr)
                return false;
-            *ptr = anim->delta_time;
+            *ptr = delta_time;
          }
          break;
       case MENU_ANIMATION_CTL_UPDATE_TIME:
@@ -569,20 +562,20 @@ bool menu_animation_ctl(enum menu_animation_ctl_state state, void *data)
             static retro_time_t last_clock_update = 0;
             settings_t *settings     = config_get_ptr();
 
-            anim->cur_time           = retro_get_time_usec();
-            anim->delta_time         = anim->cur_time - anim->old_time;
+            cur_time                 = retro_get_time_usec();
+            delta_time               = cur_time - old_time;
 
-            if (anim->delta_time >= IDEAL_DT * 4)
-               anim->delta_time = IDEAL_DT * 4;
-            if (anim->delta_time <= IDEAL_DT / 4)
-               anim->delta_time = IDEAL_DT / 4;
-            anim->old_time      = anim->cur_time;
+            if (delta_time >= IDEAL_DELTA_TIME* 4)
+               delta_time = IDEAL_DELTA_TIME * 4;
+            if (delta_time <= IDEAL_DELTA_TIME / 4)
+               delta_time = IDEAL_DELTA_TIME / 4;
+            old_time      = cur_time;
 
-            if (((anim->cur_time - last_clock_update) > 1000000) 
+            if (((cur_time - last_clock_update) > 1000000) 
                   && settings->menu.timedate_enable)
             {
-               anim->is_active           = true;
-               last_clock_update = anim->cur_time;
+               animation_is_active   = true;
+               last_clock_update     = cur_time;
             }
          }
          break;
@@ -595,20 +588,17 @@ bool menu_animation_ctl(enum menu_animation_ctl_state state, void *data)
             if (!dt)
                return false;
 
-            if (anim)
-            {
-               for(i = 0; i < anim->size; i++)
-                  menu_animation_iterate(anim, i, *dt, &active_tweens);
-            }
+            for(i = 0; i < anim.size; i++)
+               menu_animation_iterate(&anim, i, *dt, &active_tweens);
 
             if (!active_tweens)
             {
-               anim->size = 0;
-               anim->first_dead = 0;
+               anim.size       = 0;
+               anim.first_dead = 0;
                return false;
             }
 
-            anim->is_active = true;
+            animation_is_active = true;
          }
          break;
       case MENU_ANIMATION_CTL_KILL_BY_TAG:
@@ -619,16 +609,16 @@ bool menu_animation_ctl(enum menu_animation_ctl_state state, void *data)
             if (!tag || tag->id == -1)
                return false;
 
-            for (i = 0; i < anim->size; ++i)
+            for (i = 0; i < anim.size; ++i)
             {
-               if (anim->list[i].tag != tag->id)
+               if (anim.list[i].tag != tag->id)
                   continue;
 
-               anim->list[i].alive   = false;
-               anim->list[i].subject = NULL;
+               anim.list[i].alive   = false;
+               anim.list[i].subject = NULL;
 
-               if (i < anim->first_dead)
-                  anim->first_dead = i;
+               if (i < anim.first_dead)
+                  anim.first_dead = i;
             }
          }
          break;
@@ -639,21 +629,21 @@ bool menu_animation_ctl(enum menu_animation_ctl_state state, void *data)
                (menu_animation_ctx_subject_t*)data;
             float            **sub = (float**)subject->data;
 
-            for (i = 0; i < anim->size; ++i)
+            for (i = 0; i < anim.size; ++i)
             {
-               if (!anim->list[i].alive)
+               if (!anim.list[i].alive)
                   continue;
 
                for (j = 0; j < subject->count; ++j)
                {
-                  if (anim->list[i].subject != sub[j])
+                  if (anim.list[i].subject != sub[j])
                      continue;
 
-                  anim->list[i].alive   = false;
-                  anim->list[i].subject = NULL;
+                  anim.list[i].alive   = false;
+                  anim.list[i].subject = NULL;
 
-                  if (i < anim->first_dead)
-                     anim->first_dead = i;
+                  if (i < anim.first_dead)
+                     anim.first_dead = i;
 
                   killed++;
                   break;
@@ -696,9 +686,20 @@ bool menu_animation_ctl(enum menu_animation_ctl_state state, void *data)
                   utf8skip(ticker->str, offset),
                   str_len);
 
-            anim->is_active = true;
+            animation_is_active = true;
          }
          break;
+      case MENU_ANIMATION_CTL_IDEAL_DELTA_TIME_GET:
+         {
+            menu_animation_ctx_delta_t *delta = 
+               (menu_animation_ctx_delta_t*)data;
+            if (!delta)
+               return false;
+            delta->ideal = delta->current / IDEAL_DELTA_TIME;
+         }
+         break;
+      case MENU_ANIMATION_CTL_PUSH:
+         return menu_animation_push(&anim, data);
       case MENU_ANIMATION_CTL_NONE:
       default:
          break;
