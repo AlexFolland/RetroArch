@@ -52,63 +52,53 @@
 #include "../../verbosity.h"
 #include "../../tasks/tasks_internal.h"
 
-#if 0
-#define ZARCH_DEBUG
-#endif
+#define ZUI_FG_NORMAL         (~0)
+#define ZUI_ITEM_SIZE_PX      54
+#define NPARTICLES            100
 
-const float ZUI_NORMAL[] = {
-   1, 1, 1, 1,
-   1, 1, 1, 1,
-   1, 1, 1, 1,
-   1, 1, 1, 1,
-};
-const float ZUI_HILITE[] = {
-   1, 0, 0, 1,
-   1, 0, 0, 1,
-   1, 0, 0, 1,
-   1, 0, 0, 1,
-};
-const float ZUI_PRESS[] = {
-   0, 1, 0, 1,
-   0, 1, 0, 1,
-   0, 1, 0, 1,
-   0, 1, 0, 1,
-};
-const float ZUI_BARBG[] = {
-   0, 0, 1, 1,
-   0, 0, 1, 1,
-   0, 0, 1, 1,
-   0, 0, 1, 1,
+enum zarch_zui_input_state
+{
+    MENU_ZARCH_MOUSE_X = 0,
+    MENU_ZARCH_MOUSE_Y,
+    MENU_POINTER_ZARCH_X,
+    MENU_POINTER_ZARCH_Y,
+    MENU_ZARCH_PRESSED
 };
 
-const uint32_t ZUI_FG_NORMAL = ~0;
-const float ZUI_BG_PANEL[] = {
+enum zarch_layout_type
+{
+   LAY_HOME = 0,
+   LAY_PICK_CORE,
+   LAY_SETTINGS
+};
+
+static const float zui_bg_panel[] = {
    0, 0, 0, 0.25,
    0, 0, 0, 0.25,
    0, 0, 0, 0.25,
    0, 0, 0, 0.25,
 };
-const float ZUI_BG_SCREEN[] = {
+
+static const float zui_bg_screen[] = {
    0.07, 0.19, 0.26, 0.75,
    0.07, 0.19, 0.26, 0.75,
    0.15, 0.31, 0.47, 0.75,
    0.15, 0.31, 0.47, 0.75,
 };
-const float ZUI_BG_HILITE[] = {
+
+static const float zui_bg_hilite[] = {
    0.22, 0.60, 0.74, 1,
    0.22, 0.60, 0.74, 1,
    0.22, 0.60, 0.74, 1,
    0.22, 0.60, 0.74, 1,
 };
 
-const float ZUI_BG_PAD_HILITE[] = {
+static const float zui_bg_pad_hilite[] = {
    0.30, 0.76, 0.93, 1,
    0.30, 0.76, 0.93, 1,
    0.30, 0.76, 0.93, 1,
    0.30, 0.76, 0.93, 1,
 };
-
-#define ZUI_MAX_MAINMENU_TABS 4
 
 typedef struct zarch_handle
 {
@@ -119,11 +109,6 @@ typedef struct zarch_handle
    unsigned height;
    gfx_font_raster_block_t tmp_block;
    unsigned hash;
-
-   struct {
-      bool enable;
-      size_t idx;
-   } pending_action_ok;
 
    struct {
       unsigned active;
@@ -166,14 +151,12 @@ typedef struct zarch_handle
    void *fb_buf;
    int font_size;
    int header_height;
-   unsigned pending_selection;
    unsigned next_id;
-   unsigned active_id;
    unsigned prev_id;
    bool     next_selection_set;
 } zui_t;
 
-typedef struct
+struct zui_tabbed
 {
    unsigned prev_id;
    unsigned active_id;
@@ -187,22 +170,17 @@ typedef struct
    int tab_width;
    unsigned tab_selection;
    bool inited;
-} zui_tabbed_t;
+};
 
-typedef struct
+struct zui_part
 {
    float x, y;
    float xspeed, yspeed;
    float alpha;
    bool alive;
-} part_t;
+};
 
-static enum
-{
-   LAY_HOME,
-   LAY_PICK_CORE,
-   LAY_SETTINGS
-} layout = LAY_HOME;
+static enum zarch_layout_type zarch_layout;
 
 static void zarch_zui_font(void)
 {
@@ -230,14 +208,6 @@ static float zarch_zui_strwidth(void *fb_buf, const char *text, float scale)
    return font_driver_get_message_width(fb_buf, text, strlen(text), scale);
 }
 
-enum zarch_zui_input_state
-{
-    MENU_ZARCH_MOUSE_X = 0,
-    MENU_ZARCH_MOUSE_Y,
-    MENU_POINTER_ZARCH_X,
-    MENU_POINTER_ZARCH_Y,
-    MENU_ZARCH_PRESSED
-};
 
 static int16_t zarch_zui_input_state(zui_t *zui, enum zarch_zui_input_state state)
 {
@@ -399,12 +369,10 @@ static float zarch_zui_scalef(float val,
    return (((val - oldmin) * (newmax - newmin)) / (oldmax - oldmin)) + newmin;
 }
 
-#define NPARTICLES 100
-
 static void zarch_zui_snow(zui_t *zui, gfx_coord_array_t *ca,
       int width, int height)
 {
-   static part_t particles[NPARTICLES];
+   static struct zui_part particles[NPARTICLES];
    static bool initialized = false;
    static int timeout      = 0;
    unsigned i, max_gen     = 2;
@@ -417,7 +385,10 @@ static void zarch_zui_snow(zui_t *zui, gfx_coord_array_t *ca,
 
    for (i = 0; i < NPARTICLES; ++i)
    {
-      part_t *p = (part_t*)&particles[i];
+      struct zui_part *p = (struct zui_part*)&particles[i];
+
+      if (!p)
+         return;
 
       if (p->alive)
       {
@@ -453,7 +424,10 @@ static void zarch_zui_snow(zui_t *zui, gfx_coord_array_t *ca,
       unsigned j;
       float alpha;
       float colors[16];
-      part_t *p = &particles[i];
+      struct zui_part *p = &particles[i];
+
+      if (!p)
+         return;
 
       if (!p->alive)
          continue;
@@ -479,10 +453,10 @@ static bool zarch_zui_button_full(zui_t *zui,
 {
    unsigned       id = zarch_zui_hash(zui, label);
    bool       active = zarch_zui_check_button_up(zui, id, x1, y1, x2, y2);
-   const float *bg = ZUI_BG_PANEL;
+   const float *bg   = zui_bg_panel;
 
    if (zui->item.active == id || zui->item.hot == id)
-      bg = ZUI_BG_HILITE;
+      bg = zui_bg_hilite;
 
    zarch_zui_push_quad(zui->width, zui->height,  bg, &zui->ca,  x1, y1, x2, y2);
    zarch_zui_draw_text(zui, ZUI_FG_NORMAL, x1+12, y1 + 41, label);
@@ -496,52 +470,37 @@ static bool zarch_zui_button(zui_t *zui, int x1, int y1, const char *label)
          + zarch_zui_strwidth(zui->fb_buf, label, 1.0) + 24, y1 + 64, label);
 }
 
-static bool zarch_zui_list_item(zui_t *zui, zui_tabbed_t *tab, int x1, int y1,
-      const char *label, unsigned item_id, const char *entry)
+static bool zarch_zui_list_item(zui_t *zui, struct zui_tabbed *tab, int x1, int y1,
+      const char *label, unsigned item_id, const char *entry, bool selected)
 {
    menu_animation_ctx_ticker_t ticker;
    char title_buf[PATH_MAX_LENGTH];
    unsigned ticker_size;
    uint64_t *frame_count = NULL;
-   bool set_active_id    = false;
    unsigned           id = zarch_zui_hash(zui, label);
    int                x2 = x1 + zui->width - 290 - 40;
    int                y2 = y1 + 50;
    bool           active = zarch_zui_check_button_up(zui, id, x1, y1, x2, y2);
-   const float       *bg = ZUI_BG_PANEL;
+   const float       *bg = zui_bg_panel;
 
    video_driver_ctl(RARCH_DISPLAY_CTL_GET_FRAME_COUNT, &frame_count);
 
    if (tab->active_id != tab->prev_id)
    {
-      set_active_id = true;
       tab->prev_id         = tab->active_id;
    }
 
-   if (zui->pending_selection == ~0U)
+   if (selected)
    {
-      if (item_id < zui->active_id)
-         zui->prev_id = item_id;
-      if (item_id > zui->active_id && !zui->next_selection_set)
-      {
-         zui->next_id            = item_id;
-         zui->next_selection_set = true;
-      }
-   }
-   else
-   {
-      if (     zui->active_id != item_id 
-            && zui->pending_selection == item_id)
-         set_active_id = true;
+      zui->next_id            = item_id;
+      zui->next_selection_set = true;
    }
 
-   if (set_active_id)
-      zui->active_id         = item_id;
-
+   /* Set background color */
    if (zui->item.active == id || zui->item.hot == id)
-      bg = ZUI_BG_HILITE;
-   else if (zui->active_id == item_id)
-      bg = ZUI_BG_PAD_HILITE;
+      bg = zui_bg_hilite;
+   else if (selected)
+      bg = zui_bg_pad_hilite;
 
    ticker_size = x2 / 14;
 
@@ -549,7 +508,7 @@ static bool zarch_zui_list_item(zui_t *zui, zui_tabbed_t *tab, int x1, int y1,
    ticker.len      = ticker_size;
    ticker.idx      = *frame_count / 50;
    ticker.str      = label;
-   ticker.selected = (bg == ZUI_BG_HILITE || bg == ZUI_BG_PAD_HILITE);
+   ticker.selected = (bg == zui_bg_hilite || bg == zui_bg_pad_hilite);
 
    menu_animation_ctl(MENU_ANIMATION_CTL_TICKER, &ticker);
 
@@ -562,21 +521,21 @@ static bool zarch_zui_list_item(zui_t *zui, zui_tabbed_t *tab, int x1, int y1,
    return active;
 }
 
-static void zarch_zui_tabbed_begin(zui_t *zui, zui_tabbed_t *tab, int x, int y)
+static void zarch_zui_tabbed_begin(zui_t *zui, struct zui_tabbed *tab, int x, int y)
 {
    tab->x            = x;
    tab->y            = y;
    tab->tabline_size = 60 + 4;
 }
 
-static bool zarch_zui_tab(zui_t *zui, zui_tabbed_t *tab,
+static bool zarch_zui_tab(zui_t *zui, struct zui_tabbed *tab,
       const char *label, unsigned tab_id)
 {
    bool active;
    int x1, y1, x2, y2;
    unsigned       id = zarch_zui_hash(zui, label);
    int         width = tab->tab_width;
-   const float   *bg = ZUI_BG_PANEL;
+   const float   *bg = zui_bg_panel;
    bool selected     = tab->tab_selection == tab_id; /* TODO/FIXME */
 
    if (!width)
@@ -601,9 +560,9 @@ static bool zarch_zui_tab(zui_t *zui, zui_tabbed_t *tab,
       tab->inited = true;
 
    if (tab->active_id == id || zui->item.active == id || zui->item.hot == id)
-      bg             = ZUI_BG_HILITE;
+      bg             = zui_bg_hilite;
    else if (selected)
-      bg             = ZUI_BG_PAD_HILITE;
+      bg             = zui_bg_pad_hilite;
 
    zarch_zui_push_quad(zui->width, zui->height,  bg, &zui->ca, x1+0, y1+0, x2, y2);
    zarch_zui_draw_text(zui, ZUI_FG_NORMAL, x1+12, y1 + 41, label);
@@ -620,7 +579,7 @@ static bool zarch_zui_tab(zui_t *zui, zui_tabbed_t *tab,
 static void zarch_zui_render_lay_settings(zui_t *zui)
 {
    int width, x1, y1;
-   static zui_tabbed_t tabbed = {~0U};
+   static struct zui_tabbed tabbed = {~0U};
 
    tabbed.vertical            = true;
    tabbed.tab_width           = 100;
@@ -633,24 +592,83 @@ static void zarch_zui_render_lay_settings(zui_t *zui)
    y1                        += 64;
 
    if (zarch_zui_button_full(zui, x1, y1, x1 + width, y1 + 64, "Back"))
-      layout = LAY_HOME;
+      zarch_layout = LAY_HOME;
 }
 
-static int zarch_zui_render_lay_root_recent(zui_t *zui, zui_tabbed_t *tabbed)
+static bool zarch_zui_gamepad_input(zui_t *zui,
+      int *gamepad_index, int *list_first,
+      unsigned skip)
+{
+   unsigned size          = menu_entries_get_size();
+   unsigned cutoff_point  = size - 5;
+
+   switch (zui->action)
+   {
+      case MENU_ACTION_LEFT:
+         if (*gamepad_index == 0)
+            break;
+
+         *gamepad_index = *gamepad_index - 5;
+
+         if (*gamepad_index < 0)
+            *gamepad_index = 0;
+         return true;
+      case MENU_ACTION_RIGHT:
+         if (*gamepad_index == (signed)(size-1))
+            break;
+
+         *gamepad_index = *gamepad_index + 5;
+
+         if (*gamepad_index > (signed)(size-1))
+            *gamepad_index   = (size -1);
+
+         return true;
+      case MENU_ACTION_UP:
+         *gamepad_index = *gamepad_index - 1;
+
+         if (*gamepad_index < 0) /* and wraparound enabled */
+            *gamepad_index = size -1;
+         else if (*gamepad_index >= (signed)cutoff_point) /* if greater than cutoff point, 
+                                                don't scroll */
+            return false;
+
+         return true;
+      case MENU_ACTION_DOWN:
+         *gamepad_index = *gamepad_index + 1;
+
+         if (*gamepad_index > (signed)(size - 1)) /* and wraparound enabled */
+            *gamepad_index = 0;
+         else if (*gamepad_index >= (signed)cutoff_point) /* if greater than cutoff point, 
+                                                don't scroll */
+            return false;
+         return true;
+      default:
+         {
+            *list_first += zui->mouse.wheel;
+            if (*list_first < 0)
+               *list_first = 0;
+            if (*list_first > (int)cutoff_point)
+               *list_first = cutoff_point;
+
+            *list_first = min(max(*list_first, 0), cutoff_point - skip);
+         }
+         return false;
+   }
+
+   return false;
+}
+
+static int zarch_zui_render_lay_root_recent(zui_t *zui, struct zui_tabbed *tabbed)
 {
    if (zarch_zui_tab(zui, tabbed, "Recent", 0))
    {
+      static int gamepad_index = 0;
       unsigned size = menu_entries_get_size();
       unsigned i, j = 0;
 
-      zui->recent_dlist_first += zui->mouse.wheel;
-
-      if (zui->recent_dlist_first < 0)
-         zui->recent_dlist_first = 0;
-      else if (zui->recent_dlist_first > (int)size - 5)
-         zui->recent_dlist_first = size - 5;
-
-      zui->recent_dlist_first = min(max(zui->recent_dlist_first, 0), size - 5);
+      if (zarch_zui_gamepad_input(zui, &gamepad_index,
+               &zui->recent_dlist_first, 0))
+         zui->recent_dlist_first = gamepad_index;
 
       for (i = zui->recent_dlist_first; i < size; ++i)
       {
@@ -658,16 +676,17 @@ static int zarch_zui_render_lay_root_recent(zui_t *zui, zui_tabbed_t *tabbed)
 
          menu_entry_get(&entry, 0, i, NULL, true);
 
-         if (zarch_zui_list_item(zui, tabbed, 0, tabbed->tabline_size + j * 54,
-                  entry.path, i, entry.value))
+         if (zarch_zui_list_item(zui, tabbed, 0, 
+                  tabbed->tabline_size + j * ZUI_ITEM_SIZE_PX,
+                  entry.path, i, entry.value, gamepad_index == (signed)i))
          {
-            zui->pending_action_ok.enable      = true;
-            zui->pending_action_ok.idx         = i;
-            return 1;
+            if (menu_entry_action(&entry, i, MENU_ACTION_OK))
+               return 1;
          }
 
          j++;
       }
+
    }
 
    return 0;
@@ -696,7 +715,8 @@ static void zarch_zui_render_lay_root_load_set_new_path(zui_t *zui,
    zui->load_dlist = NULL;
 }
 
-static int zarch_zui_render_lay_root_load(zui_t *zui, zui_tabbed_t *tabbed)
+static int zarch_zui_render_lay_root_load(zui_t *zui,
+      struct zui_tabbed *tabbed)
 {
    char parent_dir[PATH_MAX_LENGTH];
    settings_t *settings   = config_get_ptr();
@@ -736,12 +756,13 @@ static int zarch_zui_render_lay_root_load(zui_t *zui, zui_tabbed_t *tabbed)
                zui->load_cwd, sizeof(parent_dir));
          if (!string_is_empty(parent_dir) &&
                zarch_zui_list_item(zui, tabbed, 0,
-                  tabbed->tabline_size + 73, " ..", 0, NULL /* TODO/FIXME */))
+                  tabbed->tabline_size + 73, " ..", 0, NULL, false /* TODO/FIXME */))
          {
             zarch_zui_render_lay_root_load_set_new_path(zui, parent_dir);
          }
          else
          {
+            static int gamepad_index = 0;
             unsigned size = zui->load_dlist->size;
             unsigned i, j = 1;
             unsigned skip = 0;
@@ -755,15 +776,9 @@ static int zarch_zui_render_lay_root_load(zui_t *zui, zui_tabbed_t *tabbed)
                skip++;
             }
 
-            zui->load_dlist_first += zui->mouse.wheel;
-
-            if (zui->load_dlist_first < 0)
-               zui->load_dlist_first = 0;
-            else if (zui->load_dlist_first > (int)size - 5)
-               zui->load_dlist_first = size - 5;
-
-            zui->load_dlist_first = min(max(zui->load_dlist_first, 0),
-                  size - 5 - skip);
+            if (zarch_zui_gamepad_input(zui, &gamepad_index,
+                     &zui->load_dlist_first, skip))
+               zui->load_dlist_first = gamepad_index;
 
             for (i = skip + zui->load_dlist_first; i < size; ++i)
             {
@@ -785,8 +800,8 @@ static int zarch_zui_render_lay_root_load(zui_t *zui, zui_tabbed_t *tabbed)
                   strncat(label, "/", sizeof(label)-1);
 
                if (zarch_zui_list_item(zui, tabbed, 0,
-                        tabbed->tabline_size + 73 + j * 54,
-                        label, i, NULL))
+                        tabbed->tabline_size + 73 + j * ZUI_ITEM_SIZE_PX,
+                        label, i, NULL, gamepad_index == (signed)(i-skip)))
                {
                   if (path_is_directory(path))
                   {
@@ -796,14 +811,14 @@ static int zarch_zui_render_lay_root_load(zui_t *zui, zui_tabbed_t *tabbed)
 
                   zui->pick_cores     = NULL;
                   zui->pick_supported = 0;
-                  strncpy(zui->pick_content,
-                        path, sizeof(zui->pick_content)-1);
+                  strlcpy(zui->pick_content,
+                        path, sizeof(zui->pick_content));
 
                   core_info_ctl(CORE_INFO_CTL_LIST_GET, &list);
 
                   core_info_list_get_supported_cores(list, path,
                         &zui->pick_cores, &zui->pick_supported);
-                  layout = LAY_PICK_CORE;
+                  zarch_layout = LAY_PICK_CORE;
                   break;
                }
                j++;
@@ -821,7 +836,7 @@ static int zarch_zui_render_lay_root_load(zui_t *zui, zui_tabbed_t *tabbed)
 }
 
 static int zarch_zui_render_lay_root_collections(
-      zui_t *zui, zui_tabbed_t *tabbed)
+      zui_t *zui, struct zui_tabbed *tabbed)
 {
    if (zarch_zui_tab(zui, tabbed, "Collections", 2))
    {
@@ -832,7 +847,7 @@ static int zarch_zui_render_lay_root_collections(
 }
 
 static int zarch_zui_render_lay_root_downloads(
-      zui_t *zui, zui_tabbed_t *tabbed)
+      zui_t *zui, struct zui_tabbed *tabbed)
 {
    if (zarch_zui_tab(zui, tabbed, "Download", 3))
    {
@@ -845,12 +860,15 @@ static int zarch_zui_render_lay_root_downloads(
 static int zarch_zui_render_lay_root(zui_t *zui)
 {
    char item[PATH_MAX_LENGTH];
-   static zui_tabbed_t tabbed = {~0U};
+   static struct zui_tabbed tabbed = {~0U};
 
    zarch_zui_tabbed_begin(zui, &tabbed, 0, 0);
 
    tabbed.width            = zui->width - 290 - 40;
    zui->next_selection_set = false;
+
+   if (!zui)
+      return 1;
 
    if (zarch_zui_render_lay_root_recent(zui, &tabbed))
       return 0;
@@ -871,33 +889,8 @@ static int zarch_zui_render_lay_root(zui_t *zui)
    zarch_zui_draw_text(zui, ZUI_FG_NORMAL, 1600 +12, 300 + 111, item); 
 #endif
 
-   if (zui->pending_selection == ~0U)
-   {
-      switch (zui->action)
-      {
-         case MENU_ACTION_UP:
-            if (zui->prev_id != ~0U && zui->prev_id != zui->active_id)
-            {
-               if (zui->prev_id < zui->active_id)
-                  zui->pending_selection = zui->prev_id;
-            }
-            break;
-         case MENU_ACTION_DOWN:
-            if (zui->next_id != ~0U && zui->next_id != zui->active_id)
-            {
-               if (zui->next_id > zui->active_id) 
-                  zui->pending_selection = zui->next_id;
-            }
-            break;
-         default:
-            break;
-      }
-   }
-   else
-      zui->pending_selection = -1;
-
    zarch_zui_push_quad(zui->width, zui->height,
-         ZUI_BG_HILITE, &zui->ca, 0, 60, zui->width - 290 - 40, 60+4);
+         zui_bg_hilite, &zui->ca, 0, 60, zui->width - 290 - 40, 60+4);
 
    return 0;
 }
@@ -905,7 +898,7 @@ static int zarch_zui_render_lay_root(zui_t *zui)
 static int zarch_zui_render_sidebar(zui_t *zui)
 {
    int width, x1, y1;
-   static zui_tabbed_t tabbed = {~0U};
+   static struct zui_tabbed tabbed = {~0U};
    tabbed.vertical = true;
    tabbed.tab_width = 100;
 
@@ -916,7 +909,7 @@ static int zarch_zui_render_sidebar(zui_t *zui)
    y1    = 20;
 
    if (zarch_zui_button_full(zui, x1, y1, x1 + width, y1 + 64, "Settings"))
-      layout = LAY_SETTINGS;
+      zarch_layout = LAY_SETTINGS;
 
    y1 += 64;
 
@@ -934,7 +927,7 @@ static int zarch_zui_load_content(zui_t *zui, unsigned i)
    rarch_task_push_content_load_default(zui->pick_cores[i].path,
          zui->pick_content, false, CORE_TYPE_PLAIN, NULL, NULL);
 
-   layout = LAY_HOME;
+   zarch_layout = LAY_HOME;
 
    return 0;
 }
@@ -945,7 +938,7 @@ static void zarch_zui_draw_cursor(float x, float y)
 
 static int zarch_zui_render_pick_core(zui_t *zui)
 {
-   static zui_tabbed_t tabbed = {~0U};
+   static struct zui_tabbed tabbed = {~0U};
    unsigned i, j = 0;
    if (zui->pick_supported == 1)
    {
@@ -953,7 +946,7 @@ static int zarch_zui_render_pick_core(zui_t *zui)
 
       (void)ret;
 
-      layout = LAY_HOME;
+      zarch_layout = LAY_HOME;
       menu_driver_ctl(RARCH_MENU_CTL_SET_PENDING_QUIT, NULL);
       return 1;
    }
@@ -961,13 +954,12 @@ static int zarch_zui_render_pick_core(zui_t *zui)
    zarch_zui_draw_text(zui, ~0, 8, 18, "Select a core: ");
 
    if (zarch_zui_button(zui, 0, 18 + zui->font_size, "<- Back"))
-      layout = LAY_HOME;
+      zarch_layout = LAY_HOME;
 
    if (!zui->pick_supported)
    {
-      zarch_zui_list_item(zui, &tabbed, 0, 54,
-            "Content unsupported", 0, NULL /* TODO/FIXME */);
-      zui->active_id = 0;
+      zarch_zui_list_item(zui, &tabbed, 0, ZUI_ITEM_SIZE_PX,
+            "Content unsupported", 0, NULL, false /* TODO/FIXME */);
       return 1;
    }
 
@@ -980,14 +972,14 @@ static int zarch_zui_render_pick_core(zui_t *zui)
       if (j > 10)
          break;
 
-      if (zarch_zui_list_item(zui, &tabbed, 0, 54 + j * 54,
-               zui->pick_cores[i].display_name, i, NULL))
+      if (zarch_zui_list_item(zui, &tabbed, 0, ZUI_ITEM_SIZE_PX + j * ZUI_ITEM_SIZE_PX,
+               zui->pick_cores[i].display_name, i, NULL, false))
       {
          int ret = zarch_zui_load_content(zui, i);
 
          (void)ret;
 
-         layout = LAY_HOME;
+         zarch_layout = LAY_HOME;
 
          menu_driver_ctl(RARCH_MENU_CTL_SET_PENDING_QUIT, NULL);
          break;
@@ -1042,11 +1034,11 @@ static void zarch_frame(void *data)
 
    menu_display_ctl(MENU_DISPLAY_CTL_FONT_BIND_BLOCK, &zui->tmp_block);
 
-   zarch_zui_push_quad(zui->width, zui->height, ZUI_BG_SCREEN,
+   zarch_zui_push_quad(zui->width, zui->height, zui_bg_screen,
          &zui->ca, 0, 0, zui->width, zui->height);
    zarch_zui_snow(zui, &zui->ca, zui->width, zui->height);
 
-   switch (layout)
+   switch (zarch_layout)
    {
       case LAY_HOME:
          if (zarch_zui_render_sidebar(zui))
@@ -1271,74 +1263,37 @@ static void zarch_context_reset(void *data)
 
 static int zarch_iterate(void *data, void *userdata, enum menu_action action)
 {
-   int action_id, ret = 0;
+   int ret;
+   size_t selection;
    menu_entry_t entry;
-   bool perform_action  = true;
-   enum menu_action act = (enum menu_action)action;
-   menu_handle_t *menu  = (menu_handle_t*)data;
    zui_t *zui           = (zui_t*)userdata;
-
-   if (!menu)
-      return 0;
 
    if (!zui)
       return -1;
-   if (!menu_navigation_ctl(MENU_NAVIGATION_CTL_GET_SELECTION, &action_id))
+   if (!menu_navigation_ctl(MENU_NAVIGATION_CTL_GET_SELECTION, &selection))
       return 0;
 
-   BIT64_SET(menu->state, MENU_STATE_RENDER_FRAMEBUFFER);
-   BIT64_SET(menu->state, MENU_STATE_BLIT);
+   menu_entry_get(&entry, 0, selection, NULL, false);
 
-   menu_entry_get(&entry, 0, action_id, NULL, false);
+   zui->action       = action;
 
-   if (action_id >= 0)
-      zui->pending_selection = action_id;
-   
-   if (zui->pending_action_ok.enable)
-   {
-      menu_entry_get(&entry, 0, zui->pending_action_ok.idx, NULL, false);
-      zui->pending_action_ok.enable = false;
-      
-      act               = MENU_ACTION_OK;
-      action_id    = zui->pending_action_ok.idx;
-      zui->pending_action_ok.idx = 0;
-   }
-   else
-   {
-      zui->action       = act;
-   }
-
-   if (perform_action)
-      ret = menu_entry_action(&entry, action_id, act);
-
-   return ret;
+   ret = menu_entry_action(&entry, selection, action);
+   if (ret)
+      return -1;
+   return 0;
 }
 
 static bool zarch_menu_init_list(void *data)
 {
-   int ret;
    menu_displaylist_info_t info = {0};
    file_list_t *menu_stack    = menu_entries_get_menu_stack_ptr(0);
    file_list_t *selection_buf = menu_entries_get_selection_buf_ptr(0);
-
 
    strlcpy(info.label,
          menu_hash_to_str(MENU_VALUE_HISTORY_TAB), sizeof(info.label));
 
    menu_entries_push(menu_stack,
          info.path, info.label, info.type, info.flags, 0);
-
-#if 0
-   menu_entries_increment_menu_stack();
-
-   strlcpy(info.label,
-         menu_hash_to_str(MENU_VALUE_MAIN_MENU), sizeof(info.label));
-
-   menu_stack = menu_entries_get_menu_stack_ptr(1);
-
-   menu_entries_push(menu_stack,
-         info.path, info.label, info.type, info.flags, 0);
-#endif
 
    event_cmd_ctl(EVENT_CMD_HISTORY_INIT, NULL);
 

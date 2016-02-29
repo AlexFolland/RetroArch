@@ -200,7 +200,7 @@ static int gl_get_message_width(void *data, const char *msg,
    unsigned msg_len = min(msg_len_full, MAX_MSG_LEN_CHUNK);
    int      delta_x = 0;
 
-   if (!font)
+   if (!font || !font->font_driver || !font->font_data)
       return 0;
 
    while (msg_len_full)
@@ -209,6 +209,7 @@ static int gl_get_message_width(void *data, const char *msg,
       {
          const struct font_glyph *glyph = 
             font->font_driver->get_glyph(font->font_data, (uint8_t)msg[i]);
+
          if (!glyph) /* Do something smarter here ... */
             glyph = font->font_driver->get_glyph(font->font_data, '?');
          if (!glyph)
@@ -340,7 +341,11 @@ static void gl_raster_font_render_message(
    int lines = 0;
    float line_height;
 
-   if (!msg || !*msg || !font->gl)
+   if (     !msg 
+         || !*msg 
+         || !font->gl 
+         || !font 
+         || !font->font_driver)
       return;
 
    /* If the font height is not supported just draw as usual */
@@ -428,6 +433,9 @@ static void gl_raster_font_render_msg(void *data, const char *msg,
       return;
 
    gl = font->gl;
+
+   if (!gl)
+      return;
 
    if (params)
    {

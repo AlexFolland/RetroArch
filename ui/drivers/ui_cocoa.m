@@ -36,6 +36,11 @@
 
 static id apple_platform;
 
+/* forward declaration */
+#ifdef HAVE_OPENGL
+void *glcontext_get_ptr(void);
+#endif
+
 void apple_rarch_exited(void)
 {
    [[NSApplication sharedApplication] terminate:nil];
@@ -347,10 +352,13 @@ static void open_document_handler(NSOpenPanel *panel, NSInteger result)
 }
 
 - (IBAction)openCore:(id)sender {
-    NSOpenPanel* panel = (NSOpenPanel*)[NSOpenPanel openPanel];
+#ifdef HAVE_OPENGL
+   NSOpenGLContext *glc  = (NSOpenGLContext*)glcontext_get_ptr();
+#endif
+    NSOpenPanel* panel   = (NSOpenPanel*)[NSOpenPanel openPanel];
     settings_t *settings = config_get_ptr();
     NSString *startdir   = BOXSTRING(settings->libretro_directory);
-	NSArray *filetypes   = [[NSArray alloc] initWithObjects:BOXSTRING("dylib"), BOXSTRING("Core"), nil];
+	NSArray *filetypes    = [[NSArray alloc] initWithObjects:BOXSTRING("dylib"), BOXSTRING("Core"), nil];
 	[panel setAllowedFileTypes:filetypes];
 #if defined(MAC_OS_X_VERSION_10_6)
     [panel setMessage:BOXSTRING("Load Core")];
@@ -372,11 +380,16 @@ static void open_document_handler(NSOpenPanel *panel, NSInteger result)
 	if (result == 1)
        open_core_handler(panel, result);
 #endif
-    [g_context makeCurrentContext];
+#ifdef HAVE_OPENGL
+    [glc makeCurrentContext];
+#endif
 }
 
 - (void)openDocument:(id)sender
 {
+#ifdef HAVE_OPENGL
+   NSOpenGLContext *glc  = (NSOpenGLContext*)glcontext_get_ptr();
+#endif
    NSOpenPanel* panel    = (NSOpenPanel*)[NSOpenPanel openPanel];
    settings_t *settings  = config_get_ptr();
    NSString *startdir    = BOXSTRING(settings->menu_content_directory);
@@ -403,7 +416,9 @@ static void open_document_handler(NSOpenPanel *panel, NSInteger result)
     if (result == 1)
         open_document_handler(panel, result);
 #endif
-    [g_context makeCurrentContext];
+#ifdef HAVE_OPENGL
+    [glc makeCurrentContext];
+#endif
 }
 
 - (void)unloadingCore

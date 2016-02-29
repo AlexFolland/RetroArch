@@ -150,7 +150,6 @@ static INLINE bool gl_query_extension(gl_t *gl, const char *ext)
 }
 
 #ifdef HAVE_OVERLAY
-static void gl_render_overlay(void *data);
 static void gl_overlay_vertex_geom(void *data,
       unsigned image,
       float x, float y, float w, float h);
@@ -1797,6 +1796,10 @@ static INLINE void gl_draw_texture(gl_t *gl)
 }
 #endif
 
+#ifdef HAVE_OVERLAY
+static void gl_render_overlay(gl_t *gl);
+#endif
+
 static bool gl_frame(void *data, const void *frame,
       unsigned frame_width, unsigned frame_height,
       uint64_t frame_count,
@@ -1805,7 +1808,6 @@ static bool gl_frame(void *data, const void *frame,
    video_shader_ctx_mvp_t mvp;
    video_shader_ctx_coords_t coords;
    video_shader_ctx_params_t params;
-   bool is_slowmotion, is_paused;
    unsigned width, height;
    struct gfx_tex_info feedback_info;
    video_shader_ctx_info_t shader_info;
@@ -1999,8 +2001,7 @@ static bool gl_frame(void *data, const void *frame,
       font_driver_render_msg(NULL, msg, NULL);
 
 #ifdef HAVE_OVERLAY
-   if (gl->overlay_enable)
-      gl_render_overlay(gl);
+   gl_render_overlay(gl);
 #endif
 
    gfx_ctx_ctl(GFX_CTL_UPDATE_WINDOW_TITLE, NULL);
@@ -2044,15 +2045,14 @@ static bool gl_frame(void *data, const void *frame,
 #endif
 #endif
 #endif
-   runloop_ctl(RUNLOOP_CTL_IS_SLOWMOTION, &is_slowmotion);
-   is_paused = runloop_ctl(RUNLOOP_CTL_IS_PAUSED, NULL);
 
    /* Disable BFI during fast forward, slow-motion,
     * and pause to prevent flicker. */
    if (
          settings->video.black_frame_insertion
          && !input_driver_ctl(RARCH_INPUT_CTL_IS_NONBLOCK_STATE, NULL)
-         && !is_slowmotion && !is_paused)
+         && !runloop_ctl(RUNLOOP_CTL_IS_SLOWMOTION, NULL)
+         && !runloop_ctl(RUNLOOP_CTL_IS_PAUSED, NULL))
    {
       gfx_ctx_ctl(GFX_CTL_SWAP_BUFFERS, NULL);
       glClear(GL_COLOR_BUFFER_BIT);
@@ -3512,14 +3512,14 @@ static void gl_overlay_set_alpha(void *data, unsigned image, float mod)
    color[12 + 3]  = mod;
 }
 
-static void gl_render_overlay(void *data)
+static void gl_render_overlay(gl_t *gl)
 {
    video_shader_ctx_mvp_t mvp;
    video_shader_ctx_coords_t coords;
    video_shader_ctx_info_t shader_info;
    unsigned i, width, height;
-   gl_t *gl = (gl_t*)data;
-   if (!gl)
+
+   if (!gl || !gl->overlay_enable)
       return;
 
    video_driver_get_size(&width, &height);
@@ -3552,6 +3552,8 @@ static void gl_render_overlay(void *data)
 
    for (i = 0; i < gl->overlays; i++)
    {
+      if (!gl)
+         return;
       glBindTexture(GL_TEXTURE_2D, gl->overlay_tex[i]);
       glDrawArrays(GL_TRIANGLE_STRIP, 4 * i, 4);
    }
@@ -3642,19 +3644,23 @@ static void gl_set_texture_frame(void *data,
       const void *frame, bool rgb32, unsigned width, unsigned height,
       float alpha)
 {
-   unsigned base_size = rgb32 ? sizeof(uint32_t) : sizeof(uint16_t);
-   gl_t *gl = (gl_t*)data;
+   enum texture_filter_type menu_filter;
+   settings_t *settings            = config_get_ptr();
+   unsigned base_size              = rgb32 ? sizeof(uint32_t) : sizeof(uint16_t);
+   gl_t *gl                        = (gl_t*)data;
    if (!gl)
       return;
 
    context_bind_hw_render(gl, false);
+
+   menu_filter = settings->menu.linear_filter ? TEXTURE_FILTER_LINEAR : TEXTURE_FILTER_NEAREST;
 
    if (!gl->menu_texture)
       glGenTextures(1, &gl->menu_texture);
 
 
    gl_load_texture_data(gl->menu_texture,
-         RARCH_WRAP_EDGE, TEXTURE_FILTER_LINEAR,
+         RARCH_WRAP_EDGE, menu_filter,
          video_pixel_get_alignment(width * base_size),
          width, height, frame,
          base_size);

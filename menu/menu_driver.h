@@ -378,6 +378,29 @@ typedef struct menu_ctx_displaylist
 typedef struct menu_ctx_iterate
 {
    enum menu_action action;
+
+   struct
+   {
+      int16_t x;
+      int16_t y;
+      bool touch;
+   } pointer;
+
+   struct
+   {
+      int16_t x;
+      int16_t y;
+      struct
+      {
+         bool left;
+         bool right;
+      } buttons;
+      struct
+      {
+         bool up;
+         bool down;
+      } wheel;
+   } mouse;
 } menu_ctx_iterate_t;
 
 typedef struct menu_ctx_environment
@@ -448,6 +471,7 @@ bool menu_driver_ctl(enum rarch_menu_ctl_state state, void *data);
 extern menu_ctx_driver_t menu_ctx_xui;
 extern menu_ctx_driver_t menu_ctx_rgui;
 extern menu_ctx_driver_t menu_ctx_mui;
+extern menu_ctx_driver_t menu_ctx_zr;
 extern menu_ctx_driver_t menu_ctx_xmb;
 extern menu_ctx_driver_t menu_ctx_zarch;
 extern menu_ctx_driver_t menu_ctx_null;

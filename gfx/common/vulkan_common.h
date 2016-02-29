@@ -129,6 +129,57 @@ enum vulkan_wsi_type
 
 typedef struct vulkan_context
 {
+   struct
+   {
+      PFN_vkDestroyFence                            vkDestroyFence;
+      PFN_vkCreateFence                             vkCreateFence;
+      PFN_vkResetFences                             vkResetFences;
+      PFN_vkWaitForFences                           vkWaitForFences;
+      PFN_vkDestroySemaphore                        vkDestroySemaphore;
+      PFN_vkCreateSemaphore                         vkCreateSemaphore;
+      PFN_vkGetDeviceQueue                          vkGetDeviceQueue;
+      PFN_vkCreateInstance                          vkCreateInstance;
+      PFN_vkEnumeratePhysicalDevices                vkEnumeratePhysicalDevices;
+      PFN_vkGetPhysicalDeviceProperties             vkGetPhysicalDeviceProperties;
+      PFN_vkGetPhysicalDeviceMemoryProperties       vkGetPhysicalDeviceMemoryProperties;
+      PFN_vkGetPhysicalDeviceQueueFamilyProperties  vkGetPhysicalDeviceQueueFamilyProperties;
+      PFN_vkQueueWaitIdle                           vkQueueWaitIdle;
+      PFN_vkCmdCopyImage                            vkCmdCopyImage;
+      PFN_vkCmdSetScissor                           vkCmdSetScissor;
+      PFN_vkCmdSetViewport                          vkCmdSetViewport;
+      PFN_vkCmdBindPipeline                         vkCmdBindPipeline;
+      PFN_vkCmdDraw                                 vkCmdDraw;
+      PFN_vkCreateDevice                            vkCreateDevice;
+      PFN_vkGetPhysicalDeviceSurfaceSupportKHR      vkGetPhysicalDeviceSurfaceSupportKHR;
+      PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabilitiesKHR;
+      PFN_vkGetPhysicalDeviceSurfaceFormatsKHR      vkGetPhysicalDeviceSurfaceFormatsKHR;
+      PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkGetPhysicalDeviceSurfacePresentModesKHR;
+      PFN_vkCreateSwapchainKHR                      vkCreateSwapchainKHR;
+      PFN_vkDestroySwapchainKHR                     vkDestroySwapchainKHR;
+      PFN_vkGetSwapchainImagesKHR                   vkGetSwapchainImagesKHR;
+      PFN_vkAcquireNextImageKHR                     vkAcquireNextImageKHR;
+      PFN_vkQueuePresentKHR                         vkQueuePresentKHR;
+#ifdef _WIN32
+      PFN_vkCreateWin32SurfaceKHR                   vkCreateWin32SurfaceKHR;
+#endif
+#ifdef HAVE_XCB
+      PFN_vkCreateXcbSurfaceKHR                     vkCreateXcbSurfaceKHR;
+#endif
+#ifdef HAVE_XLIB
+      PFN_vkCreateXlibSurfaceKHR                    vkCreateXlibSurfaceKHR;
+#endif
+#ifdef ANDROID
+      PFN_vkCreateAndroidSurfaceKHR                 vkCreateAndroidSurfaceKHR;
+#endif
+#ifdef HAVE_WAYLAND
+      PFN_vkCreateWaylandSurfaceKHR                 vkCreateWaylandSurfaceKHR;
+#endif
+#ifdef HAVE_MIR
+      PFN_vkCreateMirSurfaceKHR                     vkCreateMirSurfaceKHR;
+#endif
+      PFN_vkDestroySurfaceKHR                       vkDestroySurfaceKHR;
+   } fp;
+
    VkInstance instance;
    VkPhysicalDevice gpu;
    VkDevice device;
@@ -157,40 +208,6 @@ typedef struct vulkan_context
 typedef struct gfx_ctx_vulkan_data
 {
    vulkan_context_t context;
-
-   PFN_vkGetPhysicalDeviceSurfaceSupportKHR 
-      fpGetPhysicalDeviceSurfaceSupportKHR;
-   PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR 
-      fpGetPhysicalDeviceSurfaceCapabilitiesKHR;
-   PFN_vkGetPhysicalDeviceSurfaceFormatsKHR 
-      fpGetPhysicalDeviceSurfaceFormatsKHR;
-   PFN_vkGetPhysicalDeviceSurfacePresentModesKHR 
-      fpGetPhysicalDeviceSurfacePresentModesKHR;
-   PFN_vkCreateSwapchainKHR fpCreateSwapchainKHR;
-   PFN_vkDestroySwapchainKHR fpDestroySwapchainKHR;
-   PFN_vkGetSwapchainImagesKHR fpGetSwapchainImagesKHR;
-   PFN_vkAcquireNextImageKHR fpAcquireNextImageKHR;
-   PFN_vkQueuePresentKHR fpQueuePresentKHR;
-#ifdef _WIN32
-   PFN_vkCreateWin32SurfaceKHR fpCreateWin32SurfaceKHR;
-#endif
-#ifdef HAVE_XCB
-   PFN_vkCreateXcbSurfaceKHR fpCreateXcbSurfaceKHR;
-#endif
-#ifdef HAVE_XLIB
-   PFN_vkCreateXlibSurfaceKHR fpCreateXlibSurfaceKHR;
-#endif
-#ifdef ANDROID
-   PFN_vkCreateAndroidSurfaceKHR fpCreateAndroidSurfaceKHR;
-#endif
-#ifdef HAVE_WAYLAND
-   PFN_vkCreateWaylandSurfaceKHR fpCreateWaylandSurfaceKHR;
-#endif
-#ifdef HAVE_MIR
-   FN_vkCreateMirSurfaceKHR fpCreateMirSurfaceKHR;
-#endif
-   PFN_vkDestroySurfaceKHR fpDestroySurfaceKHR;
-
    VkSurfaceKHR vk_surface;
    VkSwapchainKHR swapchain;
    bool need_new_swapchain;

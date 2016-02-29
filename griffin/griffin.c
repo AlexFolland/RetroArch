@@ -869,6 +869,11 @@ MENU
 #include "../menu/drivers/materialui.c"
 #endif
 
+#ifdef HAVE_ZAHNRAD
+#include "../deps/zahnrad/zahnrad.c"
+#include "../menu/drivers/zr.c"
+#endif
+
 #ifdef HAVE_ZARCH
 #include "../menu/drivers/zarch.c"
 #endif
