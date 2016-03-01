@@ -18,9 +18,10 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <vulkan/vulkan.h>
 
-#include "libretro-common/include/boolean.h"
+#include "../common/vulkan_common.h"
+
+#include <boolean.h>
 
 #ifdef __cplusplus
 extern "C" {

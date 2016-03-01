@@ -28,54 +28,7 @@
 
 #define VULKAN_DIRTY_DYNAMIC_BIT                0x0001
 
-#define VK_PROTOTYPES
-
-#ifdef HAVE_WAYLAND
-#define VK_USE_PLATFORM_WAYLAND_KHR
-#endif
-
-#ifdef HAVE_MIR
-#define VK_USE_PLATFORM_MIR_KHR
-#endif
-
-#ifdef _WIN32
-#define VK_USE_PLATFORM_WIN32_KHR
-#endif
-
-#ifdef HAVE_XCB
-#define VK_USE_PLATFORM_XCB_KHR
-#endif
-
-#ifdef HAVE_XLIB
-#define VK_USE_PLATFORM_XLIB_KHR
-#endif
-
-#include <vulkan/vulkan.h>
-
-#ifndef VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL
-#define VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL 1024
-#endif
-
-typedef struct VkDmaBufImageCreateInfo_
-{
-    VkStructureType                             sType; /* Must be VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL */
-    const void*                                 pNext; /* Pointer to next structure. */
-    int                                         fd;
-    VkFormat                                    format;
-    VkExtent3D                                  extent;         /* Depth must be 1 */
-    uint32_t                                    strideInBytes;
-} VkDmaBufImageCreateInfo;
-
-typedef VkResult (VKAPI_PTR *PFN_vkCreateDmaBufImageINTEL)(VkDevice device,
-      const VkDmaBufImageCreateInfo* pCreateInfo,
-      const VkAllocationCallbacks* pAllocator, VkDeviceMemory* pMem, VkImage* pImage);
-
-VKAPI_ATTR VkResult VKAPI_CALL vkCreateDmaBufImageINTEL(
-    VkDevice                                    _device,
-    const VkDmaBufImageCreateInfo*              pCreateInfo,
-    const VkAllocationCallbacks*                pAllocator,
-    VkDeviceMemory*                             pMem,
-    VkImage*                                    pImage);
+#include "vksym.h"
 
 #include <boolean.h>
 #include <retro_inline.h>
@@ -94,6 +47,8 @@ VKAPI_ATTR VkResult VKAPI_CALL vkCreateDmaBufImageINTEL(
 #include "../video_context_driver.h"
 #include "libretro_vulkan.h"
 #include "../drivers_shader/shader_vulkan.h"
+
+typedef struct vulkan_filter_chain vulkan_filter_chain_t;
 
 enum vk_texture_type
 {
@@ -129,57 +84,6 @@ enum vulkan_wsi_type
 
 typedef struct vulkan_context
 {
-   struct
-   {
-      PFN_vkDestroyFence                            vkDestroyFence;
-      PFN_vkCreateFence                             vkCreateFence;
-      PFN_vkResetFences                             vkResetFences;
-      PFN_vkWaitForFences                           vkWaitForFences;
-      PFN_vkDestroySemaphore                        vkDestroySemaphore;
-      PFN_vkCreateSemaphore                         vkCreateSemaphore;
-      PFN_vkGetDeviceQueue                          vkGetDeviceQueue;
-      PFN_vkCreateInstance                          vkCreateInstance;
-      PFN_vkEnumeratePhysicalDevices                vkEnumeratePhysicalDevices;
-      PFN_vkGetPhysicalDeviceProperties             vkGetPhysicalDeviceProperties;
-      PFN_vkGetPhysicalDeviceMemoryProperties       vkGetPhysicalDeviceMemoryProperties;
-      PFN_vkGetPhysicalDeviceQueueFamilyProperties  vkGetPhysicalDeviceQueueFamilyProperties;
-      PFN_vkQueueWaitIdle                           vkQueueWaitIdle;
-      PFN_vkCmdCopyImage                            vkCmdCopyImage;
-      PFN_vkCmdSetScissor                           vkCmdSetScissor;
-      PFN_vkCmdSetViewport                          vkCmdSetViewport;
-      PFN_vkCmdBindPipeline                         vkCmdBindPipeline;
-      PFN_vkCmdDraw                                 vkCmdDraw;
-      PFN_vkCreateDevice                            vkCreateDevice;
-      PFN_vkGetPhysicalDeviceSurfaceSupportKHR      vkGetPhysicalDeviceSurfaceSupportKHR;
-      PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR vkGetPhysicalDeviceSurfaceCapabilitiesKHR;
-      PFN_vkGetPhysicalDeviceSurfaceFormatsKHR      vkGetPhysicalDeviceSurfaceFormatsKHR;
-      PFN_vkGetPhysicalDeviceSurfacePresentModesKHR vkGetPhysicalDeviceSurfacePresentModesKHR;
-      PFN_vkCreateSwapchainKHR                      vkCreateSwapchainKHR;
-      PFN_vkDestroySwapchainKHR                     vkDestroySwapchainKHR;
-      PFN_vkGetSwapchainImagesKHR                   vkGetSwapchainImagesKHR;
-      PFN_vkAcquireNextImageKHR                     vkAcquireNextImageKHR;
-      PFN_vkQueuePresentKHR                         vkQueuePresentKHR;
-#ifdef _WIN32
-      PFN_vkCreateWin32SurfaceKHR                   vkCreateWin32SurfaceKHR;
-#endif
-#ifdef HAVE_XCB
-      PFN_vkCreateXcbSurfaceKHR                     vkCreateXcbSurfaceKHR;
-#endif
-#ifdef HAVE_XLIB
-      PFN_vkCreateXlibSurfaceKHR                    vkCreateXlibSurfaceKHR;
-#endif
-#ifdef ANDROID
-      PFN_vkCreateAndroidSurfaceKHR                 vkCreateAndroidSurfaceKHR;
-#endif
-#ifdef HAVE_WAYLAND
-      PFN_vkCreateWaylandSurfaceKHR                 vkCreateWaylandSurfaceKHR;
-#endif
-#ifdef HAVE_MIR
-      PFN_vkCreateMirSurfaceKHR                     vkCreateMirSurfaceKHR;
-#endif
-      PFN_vkDestroySurfaceKHR                       vkDestroySurfaceKHR;
-   } fp;
-
    VkInstance instance;
    VkPhysicalDevice gpu;
    VkDevice device;
@@ -295,7 +199,8 @@ bool vulkan_buffer_chain_alloc(const struct vulkan_context *context,
       struct vk_buffer_chain *chain, size_t size,
       struct vk_buffer_range *range);
 
-void vulkan_buffer_chain_free(VkDevice device,
+void vulkan_buffer_chain_free(
+      VkDevice device,
       struct vk_buffer_chain *chain);
 
 
@@ -484,8 +389,13 @@ struct vk_texture vulkan_create_texture(vk_t *vk,
 
 void vulkan_transition_texture(vk_t *vk, struct vk_texture *texture);
 
-void vulkan_map_persistent_texture(VkDevice device, struct vk_texture *tex);
-void vulkan_destroy_texture(VkDevice device, struct vk_texture *tex);
+void vulkan_map_persistent_texture(
+      VkDevice device,
+      struct vk_texture *texture);
+
+void vulkan_destroy_texture(
+      VkDevice device,
+      struct vk_texture *tex);
 
 void vulkan_copy_staging_to_dynamic(vk_t *vk, VkCommandBuffer cmd,
       struct vk_texture *dynamic,
@@ -550,19 +460,28 @@ static INLINE void vulkan_write_quad_vbo(struct vk_vertex *pv,
    }
 }
 
-struct vk_buffer vulkan_create_buffer(const struct vulkan_context *context,
+struct vk_buffer vulkan_create_buffer(
+      const struct vulkan_context *context,
       size_t size, VkBufferUsageFlags usage);
-void vulkan_destroy_buffer(VkDevice device, struct vk_buffer *buffer);
 
-VkDescriptorSet vulkan_descriptor_manager_alloc(VkDevice device,
+void vulkan_destroy_buffer(
+      VkDevice device,
+      struct vk_buffer *buffer);
+
+VkDescriptorSet vulkan_descriptor_manager_alloc(
+      VkDevice device,
       struct vk_descriptor_manager *manager);
 
-void vulkan_descriptor_manager_restart(struct vk_descriptor_manager *manager);
+void vulkan_descriptor_manager_restart(
+      struct vk_descriptor_manager *manager);
 
-struct vk_descriptor_manager vulkan_create_descriptor_manager(VkDevice device,
+struct vk_descriptor_manager vulkan_create_descriptor_manager(
+      VkDevice device,
       const VkDescriptorPoolSize *sizes, unsigned num_sizes,
       VkDescriptorSetLayout set_layout);
-void vulkan_destroy_descriptor_manager(VkDevice device,
+
+void vulkan_destroy_descriptor_manager(
+      VkDevice device,
       struct vk_descriptor_manager *manager);
 
 bool vulkan_context_init(gfx_ctx_vulkan_data_t *vk,
