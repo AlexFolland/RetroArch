@@ -115,9 +115,6 @@ typedef struct menu_input
 
    struct
    {
-      const char **buffer;
-      const char *label;
-      char label_setting[256];
       bool display;
       unsigned type;
       unsigned idx;
@@ -642,8 +639,10 @@ static bool menu_input_key_bind_iterate(char *s, size_t len)
 
 bool menu_input_ctl(enum menu_input_ctl_state state, void *data)
 {
+   static char menu_input_keyboard_label_setting[256];
    menu_input_t *menu_input = menu_input_get_ptr();
-   menu_handle_t      *menu = NULL;
+   static const char *menu_input_keyboard_label = NULL;
+   static const char **menu_input_keyboard_buffer;
 
    if (!menu_input)
       return false;
@@ -681,14 +680,17 @@ bool menu_input_ctl(enum menu_input_ctl_state state, void *data)
          memset(menu_input, 0, sizeof(menu_input_t));
          break;
       case MENU_INPUT_CTL_SEARCH_START:
-         if (!menu_driver_ctl(
-                  RARCH_MENU_CTL_DRIVER_DATA_GET, &menu))
-            return false;
+         {
+            menu_handle_t      *menu = NULL;
+            if (!menu_driver_ctl(
+                     RARCH_MENU_CTL_DRIVER_DATA_GET, &menu))
+               return false;
 
-         menu_input->keyboard.display = true;
-         menu_input->keyboard.label   = menu_hash_to_str(MENU_VALUE_SEARCH);
-         menu_input->keyboard.buffer  =
-            input_keyboard_start_line(menu, menu_input_search_cb);
+            menu_input->keyboard.display = true;
+            menu_input_keyboard_label    = menu_hash_to_str(MENU_VALUE_SEARCH);
+            menu_input_keyboard_buffer   =
+               input_keyboard_start_line(menu, menu_input_search_cb);
+         }
          break;
       case MENU_INPUT_CTL_MOUSE_PTR:
          {
@@ -735,39 +737,39 @@ bool menu_input_ctl(enum menu_input_ctl_state state, void *data)
       case MENU_INPUT_CTL_KEYBOARD_BUFF_PTR:
          {
             const char **ptr = (const char**)data;
-            *ptr = *menu_input->keyboard.buffer;
+            *ptr = *menu_input_keyboard_buffer;
          }
          break;
       case MENU_INPUT_CTL_KEYBOARD_LABEL:
          {
             const char **ptr = (const char**)data;
-            *ptr = menu_input->keyboard.label;
+            *ptr = menu_input_keyboard_label;
          }
          break;
       case MENU_INPUT_CTL_SET_KEYBOARD_LABEL:
          {
             char **ptr = (char**)data;
-            menu_input->keyboard.label = *ptr;
+            menu_input_keyboard_label = *ptr;
          }
          break;
       case MENU_INPUT_CTL_UNSET_KEYBOARD_LABEL:
-         menu_input->keyboard.label = NULL;
+         menu_input_keyboard_label = NULL;
          break;
       case MENU_INPUT_CTL_KEYBOARD_LABEL_SETTING:
          {
             const char **ptr = (const char**)data;
-            *ptr = menu_input->keyboard.label_setting;
+            *ptr = menu_input_keyboard_label_setting;
          }
          break;
       case MENU_INPUT_CTL_SET_KEYBOARD_LABEL_SETTING:
          {
             char **ptr = (char**)data;
-            strlcpy(menu_input->keyboard.label_setting,
-            *ptr, sizeof(menu_input->keyboard.label_setting));
+            strlcpy(menu_input_keyboard_label_setting,
+            *ptr, sizeof(menu_input_keyboard_label_setting));
          }
          break;
       case MENU_INPUT_CTL_UNSET_KEYBOARD_LABEL_SETTING:
-         menu_input->keyboard.label_setting[0] = '\0';
+         menu_input_keyboard_label_setting[0] = '\0';
          break;
       case MENU_INPUT_CTL_BIND_NONE:
       case MENU_INPUT_CTL_BIND_SINGLE:
@@ -800,7 +802,7 @@ bool menu_input_ctl(enum menu_input_ctl_state state, void *data)
 
             menu_input->keyboard.type   = line->type;
             menu_input->keyboard.idx    = line->idx;
-            menu_input->keyboard.buffer = 
+            menu_input_keyboard_buffer  = 
                input_keyboard_start_line(menu, line->cb);
          }
          break;
@@ -849,8 +851,8 @@ static int menu_input_mouse_frame(
       menu_file_list_cbs_t *cbs, menu_entry_t *entry,
       uint64_t input_mouse, unsigned action)
 {
-   int ret = 0;
    size_t selection;
+   int ret                  = 0;
    menu_input_t *menu_input = menu_input_get_ptr();
 
    menu_navigation_ctl(MENU_NAVIGATION_CTL_GET_SELECTION, &selection);
@@ -1313,7 +1315,7 @@ unsigned menu_input_frame_retropad(retro_input_t input,
          menu_navigation_ctl(MENU_NAVIGATION_CTL_GET_SCROLL_ACCEL,
                &new_scroll_accel);
 
-         new_scroll_accel = min(new_scroll_accel + 1, 64);
+         new_scroll_accel = MIN(new_scroll_accel + 1, 64);
       }
 
       initial_held  = false;

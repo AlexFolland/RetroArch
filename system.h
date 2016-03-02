@@ -33,16 +33,13 @@ extern "C" {
 typedef struct rarch_system_info
 {
    char title_buf[64];
-   char game_options_path[PATH_MAX_LENGTH];
 
    struct retro_system_info info;
 
    unsigned rotation;
    unsigned performance_level;
 
-   bool block_extract;
    bool force_nonblock;
-   bool no_content;
 
    const char *input_desc_btn[MAX_USERS][RARCH_FIRST_META_KEY];
    char valid_extensions[PATH_MAX_LENGTH];

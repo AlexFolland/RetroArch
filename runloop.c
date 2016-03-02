@@ -467,7 +467,6 @@ bool runloop_ctl(enum runloop_ctl_state state, void *data)
                runloop_system.info.valid_extensions ?
                runloop_system.info.valid_extensions : DEFAULT_EXT,
                sizeof(runloop_system.valid_extensions));
-         runloop_system.block_extract = runloop_system.info.block_extract;
          break;
       case RUNLOOP_CTL_GET_CORE_OPTION_SIZE:
          {
@@ -1081,26 +1080,29 @@ bool runloop_ctl(enum runloop_ctl_state state, void *data)
          }
          break;
       case RUNLOOP_CTL_CORE_OPTIONS_DEINIT:
-         if (!runloop_system.core_options)
-            return false;
-
-         /* check if game options file was just created and flush
-            to that file instead */
-         if(!string_is_empty(runloop_system.game_options_path))
          {
-            core_option_flush_game_specific(runloop_system.core_options,
-                  runloop_system.game_options_path);
-            runloop_system.game_options_path[0] = '\0';
+            global_t *global                  = global_get_ptr();
+            if (!global || !runloop_system.core_options)
+               return false;
+
+            /* check if game options file was just created and flush
+               to that file instead */
+            if(!string_is_empty(global->path.core_options_path))
+            {
+               core_option_flush_game_specific(runloop_system.core_options,
+                     global->path.core_options_path);
+               global->path.core_options_path[0] = '\0';
+            }
+            else
+               core_option_flush(runloop_system.core_options);
+
+            core_option_free(runloop_system.core_options);
+
+            if (runloop_ctl(RUNLOOP_CTL_IS_GAME_OPTIONS_ACTIVE, NULL))
+               runloop_ctl(RUNLOOP_CTL_UNSET_GAME_OPTIONS_ACTIVE, NULL);
+
+            runloop_system.core_options = NULL;
          }
-         else
-            core_option_flush(runloop_system.core_options);
-
-         core_option_free(runloop_system.core_options);
-
-         if (runloop_ctl(RUNLOOP_CTL_IS_GAME_OPTIONS_ACTIVE, NULL))
-            runloop_ctl(RUNLOOP_CTL_UNSET_GAME_OPTIONS_ACTIVE, NULL);
-
-         runloop_system.core_options = NULL;
          break;
       case RUNLOOP_CTL_KEY_EVENT_GET:
          {

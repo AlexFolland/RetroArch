@@ -32,6 +32,10 @@
 #include "../common/gl_common.h"
 #endif
 
+#ifdef HAVE_VULKAN
+#include "../common/vulkan_common.h"
+#endif
+
 #include "../../frontend/drivers/platform_linux.h"
 
 static enum gfx_ctx_api android_api;
@@ -49,9 +53,46 @@ typedef struct
    egl_ctx_data_t egl;
 #endif
 #ifdef HAVE_VULKAN
+   gfx_ctx_vulkan_data_t vk;
+   unsigned width;
+   unsigned height;
    unsigned swap_interval;
 #endif
 } android_ctx_data_t;
+
+static void android_gfx_ctx_destroy(void *data)
+{
+   android_ctx_data_t *and         = (android_ctx_data_t*)data;
+#ifdef HAVE_VULKAN
+   struct android_app *android_app = (struct android_app*)g_android;
+#endif
+
+   if (!and)
+      return;
+
+   switch (android_api)
+   {
+      case GFX_CTX_OPENGL_API:
+      case GFX_CTX_OPENGL_ES_API:
+#ifdef HAVE_EGL
+         egl_destroy(&and->egl);
+#endif
+         break;
+      case GFX_CTX_VULKAN_API:
+#ifdef HAVE_VULKAN
+         vulkan_context_destroy(&and->vk, android_app->window);
+
+         if (and->vk.context.queue_lock)
+            slock_free(and->vk.context.queue_lock);
+#endif
+         break;
+      case GFX_CTX_NONE:
+      default:
+         break;
+   }
+
+   free(data);
+}
 
 static void *android_gfx_ctx_init(void *video_driver)
 {
@@ -96,6 +137,12 @@ static void *android_gfx_ctx_init(void *video_driver)
             goto error;
 #endif
          break;
+      case GFX_CTX_VULKAN_API:
+#ifdef HAVE_VULKAN
+         if (!vulkan_context_init(&and->vk, VULKAN_WSI_ANDROID))
+            goto error;
+#endif
+         break;
       case GFX_CTX_NONE:
       default:
          break;
@@ -122,6 +169,16 @@ static void *android_gfx_ctx_init(void *video_driver)
             goto unlock_error;
 #endif
          break;
+      case GFX_CTX_VULKAN_API:
+#ifdef HAVE_VULKAN
+         and->width  = ANativeWindow_getWidth(android_app->window);
+         and->height = ANativeWindow_getHeight(android_app->window);
+         if (!vulkan_surface_create(&and->vk, VULKAN_WSI_ANDROID,
+                  NULL, android_app->window, 
+                  and->width, and->height, and->swap_interval))
+            goto error;
+#endif
+         break;
       case GFX_CTX_NONE:
       default:
          break;
@@ -133,34 +190,34 @@ static void *android_gfx_ctx_init(void *video_driver)
 unlock_error:
    slock_unlock(android_app->mutex);
 error:
+   android_gfx_ctx_destroy(and);
+
+   return NULL;
+}
+
+static void android_gfx_ctx_get_video_size(void *data,
+      unsigned *width, unsigned *height)
+{
+   android_ctx_data_t *and  = (android_ctx_data_t*)data;
+
    switch (android_api)
    {
       case GFX_CTX_OPENGL_API:
       case GFX_CTX_OPENGL_ES_API:
 #ifdef HAVE_EGL
-         egl_destroy(&and->egl);
+         egl_get_video_size(&and->egl, width, height);
+#endif
+         break;
+      case GFX_CTX_VULKAN_API:
+#ifdef HAVE_VULKAN
+         *width  = and->width;
+         *height = and->height;
 #endif
          break;
       case GFX_CTX_NONE:
       default:
          break;
    }
-
-   return NULL;
-}
-
-static void android_gfx_ctx_destroy(void *data)
-{
-   android_ctx_data_t *and  = (android_ctx_data_t*)data;
-
-   if (!and)
-      return;
-
-#ifdef HAVE_OPENGLES
-   egl_destroy(&and->egl);
-#endif
-
-   free(data);
 }
 
 static void android_gfx_ctx_check_window(void *data, bool *quit,
@@ -177,8 +234,15 @@ static void android_gfx_ctx_check_window(void *data, bool *quit,
    {
       case GFX_CTX_OPENGL_API:
       case GFX_CTX_OPENGL_ES_API:
-#ifdef HAVE_OPENGLES
+#ifdef HAVE_EGL
          egl_get_video_size(&and->egl, &new_width, &new_height);
+#endif
+         break;
+      case GFX_CTX_VULKAN_API:
+#ifdef HAVE_VULKAN
+         /* Swapchains are recreated in set_resize as a 
+          * central place, so use that to trigger swapchain reinit. */
+         *resize = and->vk.need_new_swapchain;
 #endif
          break;
       case GFX_CTX_NONE:
@@ -224,10 +288,27 @@ static bool android_gfx_ctx_set_video_mode(void *data,
       unsigned width, unsigned height,
       bool fullscreen)
 {
-   (void)data;
+#ifdef HAVE_VULKAN
+   android_ctx_data_t *and  = (android_ctx_data_t*)data;
+#endif
+
    (void)width;
    (void)height;
    (void)fullscreen;
+
+   switch (android_api)
+   {
+      case GFX_CTX_VULKAN_API:
+#ifdef HAVE_VULKAN
+         and->width  = width;
+         and->height = height;
+#endif
+         break;
+      case GFX_CTX_NONE:
+      default:
+         break;
+   }
+
    return true;
 }
 
@@ -267,6 +348,13 @@ static bool android_gfx_ctx_bind_api(void *data,
          }
 #endif
          break;
+      case GFX_CTX_VULKAN_API:
+#ifdef HAVE_VULKAN
+         android_api = api;
+         return true;
+#else
+         break;
+#endif
       default:
          break;
    }
@@ -276,8 +364,8 @@ static bool android_gfx_ctx_bind_api(void *data,
 
 static bool android_gfx_ctx_has_focus(void *data)
 {
-   struct android_app *android_app = (struct android_app*)g_android;
    bool focused;
+   struct android_app *android_app = (struct android_app*)g_android;
    if (!android_app)
       return true;
 
@@ -353,6 +441,12 @@ static void android_gfx_ctx_swap_buffers(void *data)
          egl_swap_buffers(&and->egl);
 #endif
          break;
+      case GFX_CTX_VULKAN_API:
+#ifdef HAVE_VULKAN
+         vulkan_present(&and->vk, and->vk.context.current_swapchain_index);
+         vulkan_acquire_next_image(&and->vk);
+#endif
+         break;
       case GFX_CTX_NONE:
       default:
          break;
@@ -371,23 +465,14 @@ static void android_gfx_ctx_set_swap_interval(void *data, unsigned swap_interval
          egl_set_swap_interval(&and->egl, swap_interval);
 #endif
          break;
-      case GFX_CTX_NONE:
-      default:
-         break;
-   }
-}
-
-static void android_gfx_ctx_get_video_size(void *data,
-      unsigned *width, unsigned *height)
-{
-   android_ctx_data_t *and  = (android_ctx_data_t*)data;
-
-   switch (android_api)
-   {
-      case GFX_CTX_OPENGL_API:
-      case GFX_CTX_OPENGL_ES_API:
-#ifdef HAVE_EGL
-         egl_get_video_size(&and->egl, width, height);
+      case GFX_CTX_VULKAN_API:
+#ifdef HAVE_VULKAN
+         if (and->swap_interval != swap_interval)
+         {
+            and->swap_interval = swap_interval;
+            if (and->vk.swapchain)
+               and->vk.need_new_swapchain = true;
+         }
 #endif
          break;
       case GFX_CTX_NONE:
@@ -395,6 +480,7 @@ static void android_gfx_ctx_get_video_size(void *data,
          break;
    }
 }
+
 
 static gfx_ctx_proc_t android_gfx_ctx_get_proc_address(const char *symbol)
 {
@@ -433,6 +519,14 @@ static void android_gfx_ctx_bind_hw_render(void *data, bool enable)
    }
 }
 
+#ifdef HAVE_VULKAN
+static void *android_gfx_ctx_get_context_data(void *data)
+{
+   android_ctx_data_t *and = (android_ctx_data_t*)data;
+   return &and->vk.context;
+}
+#endif
+
 const gfx_ctx_driver_t gfx_ctx_android = {
    android_gfx_ctx_init,
    android_gfx_ctx_destroy,
@@ -459,4 +553,9 @@ const gfx_ctx_driver_t gfx_ctx_android = {
    NULL,
    "android",
    android_gfx_ctx_bind_hw_render,
+#ifdef HAVE_VULKAN
+   android_gfx_ctx_get_context_data
+#else
+   NULL
+#endif
 };
