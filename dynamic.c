@@ -860,16 +860,18 @@ bool rarch_environment_cb(unsigned cmd, void *data)
 
       case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE:
          RARCH_LOG("Environ SET_DISK_CONTROL_INTERFACE.\n");
-         system->disk_control =
+         system->disk_control_cb =
             *(const struct retro_disk_control_callback*)data;
          break;
 
       case RETRO_ENVIRONMENT_SET_HW_RENDER:
       case RETRO_ENVIRONMENT_SET_HW_RENDER | RETRO_ENVIRONMENT_EXPERIMENTAL:
       {
-         struct retro_hw_render_callback *hw_render = video_driver_callback();
+         struct retro_hw_render_callback *hwr = NULL;
          struct retro_hw_render_callback *cb =
             (struct retro_hw_render_callback*)data;
+
+         video_driver_ctl(RARCH_DISPLAY_CTL_HW_CONTEXT_GET, &hwr);
 
          RARCH_LOG("Environ SET_HW_RENDER.\n");
 
@@ -943,10 +945,10 @@ bool rarch_environment_cb(unsigned cmd, void *data)
 
          /* Old ABI. Don't copy garbage. */
          if (cmd & RETRO_ENVIRONMENT_EXPERIMENTAL) 
-            memcpy(hw_render,
+            memcpy(hwr,
                   cb, offsetof(struct retro_hw_render_callback, stencil));
          else
-            memcpy(hw_render, cb, sizeof(*cb));
+            memcpy(hwr, cb, sizeof(*cb));
          break;
       }
 
@@ -997,19 +999,8 @@ bool rarch_environment_cb(unsigned cmd, void *data)
 
       case RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK:
       {
-         const struct retro_frame_time_callback *info =
-            (const struct retro_frame_time_callback*)data;
-
          RARCH_LOG("Environ SET_FRAME_TIME_CALLBACK.\n");
-
-#ifdef HAVE_NETPLAY
-         /* retro_run() will be called in very strange and
-          * mysterious ways, have to disable it. */
-         if (global->netplay.enable)
-            return false;
-#endif
-
-         system->frame_time = *info;
+         runloop_ctl(RUNLOOP_CTL_SET_FRAME_TIME, data);
          break;
       }
 
@@ -1045,16 +1036,17 @@ bool rarch_environment_cb(unsigned cmd, void *data)
          iface->get_sensor_input = input_sensor_get_input;
          break;
       }
-
       case RETRO_ENVIRONMENT_GET_CAMERA_INTERFACE:
       {
          struct retro_camera_callback *cb =
             (struct retro_camera_callback*)data;
 
          RARCH_LOG("Environ GET_CAMERA_INTERFACE.\n");
-         cb->start                         = driver_camera_start;
-         cb->stop                          = driver_camera_stop;
-         system->camera_callback           = *cb;
+         cb->start                        = driver_camera_start;
+         cb->stop                         = driver_camera_stop;
+
+         camera_driver_ctl(RARCH_CAMERA_CTL_SET_CB, cb);
+
          if (cb->caps != 0)
             camera_driver_ctl(RARCH_CAMERA_CTL_SET_ACTIVE, NULL);
          else
@@ -1072,7 +1064,7 @@ bool rarch_environment_cb(unsigned cmd, void *data)
          cb->stop                  = driver_location_stop;
          cb->get_position          = driver_location_get_position;
          cb->set_interval          = driver_location_set_interval;
-         system->location_callback = *cb;
+         system->location_cb       = *cb;
 
          location_driver_ctl(RARCH_LOCATION_CTL_UNSET_ACTIVE, NULL);
          break;
@@ -1143,16 +1135,16 @@ bool rarch_environment_cb(unsigned cmd, void *data)
             }
          }
 
-         free(system->special);
-         system->special = (struct retro_subsystem_info*)
-            calloc(i, sizeof(*system->special));
+         free(system->subsystem.data);
+         system->subsystem.data = (struct retro_subsystem_info*)
+            calloc(i, sizeof(*system->subsystem.data));
 
-         if (!system->special)
+         if (!system->subsystem.data)
             return false;
 
-         memcpy(system->special, info,
-               i * sizeof(*system->special));
-         system->num_special = i;
+         memcpy(system->subsystem.data, info,
+               i * sizeof(*system->subsystem.data));
+         system->subsystem.size = i;
          break;
       }
 
@@ -1172,15 +1164,15 @@ bool rarch_environment_cb(unsigned cmd, void *data)
                      info[i].types[j].id);
          }
 
-         free(system->ports);
-         system->ports = (struct retro_controller_info*)
-            calloc(i, sizeof(*system->ports));
-         if (!system->ports)
+         free(system->ports.data);
+         system->ports.data = (struct retro_controller_info*)
+            calloc(i, sizeof(*system->ports.data));
+         if (!system->ports.data)
             return false;
 
-         memcpy(system->ports, info,
-               i * sizeof(*system->ports));
-         system->num_ports = i;
+         memcpy(system->ports.data, info,
+               i * sizeof(*system->ports.data));
+         system->ports.size = i;
          break;
       }
 

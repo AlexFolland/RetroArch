@@ -74,6 +74,10 @@ COMPATIBILITY
 #include "../compat/compat_posix_string.c"
 #endif
 
+#if defined(WANT_IFADDRS)
+#include "../compat/compat_ifaddrs.c"
+#endif
+
 #include "../libretro-common/compat/compat_fnmatch.c"
 #include "../libretro-common/memmap/memalign.c"
 
@@ -774,6 +778,9 @@ NETPLAY
 #include "../netplay/netplay.c"
 #include "../libretro-common/net/net_compat.c"
 #include "../libretro-common/net/net_http.c"
+#ifndef HAVE_SOCKET_LEGACY
+#include "../libretro-common/net/net_ifinfo.c"
+#endif
 #include "../tasks/task_http.c"
 #endif
 

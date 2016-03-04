@@ -56,6 +56,8 @@
 #define ZUI_ITEM_SIZE_PX      54
 #define NPARTICLES            100
 
+typedef uintptr_t zarch_texture_item;
+
 enum zarch_zui_input_state
 {
     MENU_ZARCH_MOUSE_X = 0,
@@ -129,13 +131,8 @@ typedef struct zarch_handle
 
    struct
    {
-      struct
-      {
-         uintptr_t id;
-         char path[PATH_MAX_LENGTH];
-      } bg;
-
-      uintptr_t white;
+      zarch_texture_item bg;
+      zarch_texture_item white;
    } textures;
 
    /* LAY_ROOT's "Recent" */
@@ -1103,7 +1100,7 @@ static void zarch_frame(void *data)
 
    draw.width              = zui->width;
    draw.height             = zui->height;
-   draw.texture            = zui->textures.bg.id;
+   draw.texture            = zui->textures.bg;
    draw.handle_alpha       = 0.75f;
    draw.force_transparency = false;
    draw.color              = &coord_color[0];
@@ -1195,7 +1192,7 @@ static void zarch_context_bg_destroy(void *data)
    zui_t        *zui     = (zui_t*)data;
    if (!zui)
       return;
-   video_driver_texture_unload(&zui->textures.bg.id);
+   video_driver_texture_unload(&zui->textures.bg);
    video_driver_texture_unload(&zui->textures.white);
 }
 
@@ -1221,7 +1218,7 @@ static bool zarch_load_image(void *userdata,
          zarch_context_bg_destroy(zui);
          video_driver_texture_load(data,
                TEXTURE_FILTER_MIPMAP_LINEAR,
-               &zui->textures.bg.id);
+               &zui->textures.bg);
          break;
       case MENU_IMAGE_BOXART:
          break;

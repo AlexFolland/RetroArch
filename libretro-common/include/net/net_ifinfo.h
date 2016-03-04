@@ -1,7 +1,7 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
- * The following license statement only applies to this file (retro_inline.h).
+ * The following license statement only applies to this file (net_ifinfo.h).
  * ---------------------------------------------------------------------------------------
  *
  * Permission is hereby granted, free of charge,
@@ -20,20 +20,30 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __LIBRETRO_SDK_INLINE_H
-#define __LIBRETRO_SDK_INLINE_H
+#ifndef _LIBRETRO_NET_IFINFO_H
+#define _LIBRETRO_NET_IFINFO_H
 
-#ifndef INLINE
+#include <stdint.h>
+#include <stddef.h>
 
-#if defined(_WIN32)
-#define INLINE __inline
-#elif defined(__STDC_VERSION__) && __STDC_VERSION__>=199901L
-#define INLINE inline
-#elif defined(__GNUC__)
-#define INLINE __inline__
-#else
-#define INLINE
-#endif
+#include <boolean.h>
 
-#endif
+struct net_ifinfo_entry
+{
+   char *name;
+   char *host;
+};
+
+struct net_ifinfo
+{
+   struct net_ifinfo_entry *entries;
+   size_t size;
+}; 
+
+typedef struct net_ifinfo net_ifinfo_t;
+
+void net_ifinfo_free(net_ifinfo_t *list);
+
+bool net_ifinfo_new(net_ifinfo_t *list);
+
 #endif

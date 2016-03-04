@@ -442,6 +442,37 @@ static int menu_displaylist_parse_debug_info(menu_displaylist_info_t *info)
    return 0;
 }
 
+#ifdef HAVE_NETPLAY
+#ifndef HAVE_SOCKET_LEGACY
+#include <net/net_ifinfo.h>
+
+static int menu_displaylist_parse_network_info(menu_displaylist_info_t *info)
+{
+   unsigned k              = 0;
+   net_ifinfo_t *list = 
+      (net_ifinfo_t*)calloc(1, sizeof(*list));
+
+   if (!list)
+      return -1;
+
+   if (!net_ifinfo_new(list))
+      return -1;
+
+   for (k = 0; k < list->size; k++)
+   {
+      char tmp[PATH_MAX_LENGTH];
+      snprintf(tmp, sizeof(tmp), "Interface (%s) : %s\n",
+            list->entries[k].name, list->entries[k].host);
+      menu_entries_push(info->list, tmp, "",
+            MENU_SETTINGS_CORE_INFO_NONE, 0, 0);
+   }
+
+   net_ifinfo_free(list);
+   return 0;
+}
+#endif
+#endif
+
 static int menu_displaylist_parse_system_info(menu_displaylist_info_t *info)
 {
    int controller;
@@ -1775,15 +1806,17 @@ static int deferred_push_video_shader_parameters_common(
 }
 #endif
 
-int menu_displaylist_parse_settings(void *data, menu_displaylist_info_t *info,
-      const char *info_label, unsigned parse_type, bool add_empty_entry)
+static int menu_displaylist_parse_settings(void *data,
+      menu_displaylist_info_t *info,
+      const char *info_label,
+      enum menu_displaylist_parse_type parse_type,
+      bool add_empty_entry)
 {
    enum setting_type precond;
    size_t             count  = 0;
    settings_t *settings      = config_get_ptr();
    rarch_setting_t *setting  = menu_setting_find(info_label);
    uint64_t flags            = menu_setting_get_flags(setting);
-
 
    if (!setting)
       return -1;
@@ -2055,7 +2088,7 @@ static int menu_displaylist_parse_load_content_settings(
             menu_hash_to_str(MENU_LABEL_CORE_CHEAT_OPTIONS),
             MENU_SETTING_ACTION, 0, 0);
       if (     (!rarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL))
-            && system && system->disk_control.get_num_images)
+            && system && system->disk_control_cb.get_num_images)
          menu_entries_push(info->list,
                menu_hash_to_str(MENU_LABEL_VALUE_DISK_OPTIONS),
                menu_hash_to_str(MENU_LABEL_DISK_OPTIONS),
@@ -2139,6 +2172,15 @@ static int menu_displaylist_parse_information_list(
          menu_hash_to_str(MENU_LABEL_VALUE_CORE_INFORMATION),
          menu_hash_to_str(MENU_LABEL_CORE_INFORMATION),
          MENU_SETTING_ACTION, 0, 0);
+
+#ifdef HAVE_NETPLAY
+#ifndef HAVE_SOCKET_LEGACY
+   menu_entries_push(info->list,
+         menu_hash_to_str(MENU_LABEL_VALUE_NETWORK_INFORMATION),
+         menu_hash_to_str(MENU_LABEL_NETWORK_INFORMATION),
+         MENU_SETTING_ACTION, 0, 0);
+#endif
+#endif
 
    menu_entries_push(info->list,
          menu_hash_to_str(MENU_LABEL_VALUE_SYSTEM_INFORMATION),
@@ -2952,6 +2994,7 @@ bool menu_displaylist_ctl(enum menu_displaylist_ctl_state type, void *data)
       case DISPLAYLIST_PLAYLIST_COLLECTION:
       case DISPLAYLIST_HISTORY:
       case DISPLAYLIST_OPTIONS_DISK:
+      case DISPLAYLIST_NETWORK_INFO:
       case DISPLAYLIST_SYSTEM_INFO:
       case DISPLAYLIST_DEBUG_INFO:
       case DISPLAYLIST_ACHIEVEMENT_LIST:
@@ -3085,6 +3128,23 @@ bool menu_displaylist_ctl(enum menu_displaylist_ctl_state type, void *data)
                info->label, info->type, info->directory_ptr, 0);
          menu->push_help_screen = false;
          break;
+      case DISPLAYLIST_SETTING:
+         {
+            menu_displaylist_ctx_parse_entry_t *entry  = 
+               (menu_displaylist_ctx_parse_entry_t*)data;
+
+            if (!entry)
+               return false;
+
+            if (menu_displaylist_parse_settings(entry->data,
+                     entry->info,
+                     entry->info_label,
+                     entry->parse_type,
+                     entry->add_empty_entry) == -1)
+               return false;
+
+         }
+         return true;
       case DISPLAYLIST_SETTINGS:
          ret = menu_displaylist_parse_settings(menu, info,
                info->label, PARSE_NONE, true);
@@ -3550,6 +3610,15 @@ bool menu_displaylist_ctl(enum menu_displaylist_ctl_state type, void *data)
                MENU_SETTINGS_CORE_DISK_OPTIONS_DISK_IMAGE_APPEND, 0, 0);
 
          info->need_push    = true;
+         break;
+      case DISPLAYLIST_NETWORK_INFO:
+#ifdef HAVE_NETPLAY
+#ifndef HAVE_SOCKET_LEGACY
+         menu_displaylist_parse_network_info(info);
+#endif
+#endif
+         info->need_push    = true;
+         info->need_refresh = true;
          break;
       case DISPLAYLIST_SYSTEM_INFO:
          menu_displaylist_parse_system_info(info);

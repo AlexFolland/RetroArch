@@ -97,6 +97,7 @@ typedef struct event_cmd_state
 } event_cmd_state_t;
 
 
+
 global_t *global_get_ptr(void)
 {
    static struct global g_extern;
@@ -411,9 +412,11 @@ bool runloop_ctl(enum runloop_ctl_state state, void *data)
    static char runloop_fullpath[PATH_MAX_LENGTH];
    static rarch_system_info_t runloop_system;
    static unsigned runloop_pending_windowed_scale;
+   static struct retro_frame_time_callback runloop_frame_time;
    static retro_keyboard_event_t runloop_key_event          = NULL;
    static retro_keyboard_event_t runloop_frontend_key_event = NULL;
    static unsigned runloop_max_frames               = false;
+   static bool runloop_force_nonblock               = false;
    static bool runloop_frame_time_last              = false;
    static bool runloop_set_frame_limit              = false;
    static bool runloop_paused                       = false;
@@ -449,19 +452,7 @@ bool runloop_ctl(enum runloop_ctl_state state, void *data)
          if (!runloop_system.info.library_version)
             runloop_system.info.library_version = "v0";
 
-         strlcpy(runloop_system.title_buf, 
-               msg_hash_to_str(MSG_PROGRAM),
-               sizeof(runloop_system.title_buf));
-         strlcat(runloop_system.title_buf,
-               " ", sizeof(runloop_system.title_buf));
-         strlcat(runloop_system.title_buf, 
-               runloop_system.info.library_name,
-               sizeof(runloop_system.title_buf));
-         strlcat(runloop_system.title_buf,
-               " ", sizeof(runloop_system.title_buf));
-         strlcat(runloop_system.title_buf,
-               runloop_system.info.library_version,
-               sizeof(runloop_system.title_buf));
+         video_driver_ctl(RARCH_DISPLAY_CTL_SET_TITLE_BUF, NULL);
 
          strlcpy(runloop_system.valid_extensions,
                runloop_system.info.valid_extensions ?
@@ -496,12 +487,14 @@ bool runloop_ctl(enum runloop_ctl_state state, void *data)
          runloop_system.core_options   = NULL;
 
          /* No longer valid. */
-         if (runloop_system.special)
-            free(runloop_system.special);
-         runloop_system.special        = NULL;
-         if (runloop_system.ports)
-            free(runloop_system.ports);
-         runloop_system.ports          = NULL;
+         if (runloop_system.subsystem.data)
+            free(runloop_system.subsystem.data);
+         runloop_system.subsystem.data        = NULL;
+         if (runloop_system.ports.data)
+            free(runloop_system.ports.data);
+         runloop_system.subsystem.size = 0;
+         runloop_system.ports.data     = NULL;
+         runloop_system.ports.size     = 0;
          runloop_key_event             = NULL;
          runloop_frontend_key_event    = NULL;
 
@@ -562,6 +555,38 @@ bool runloop_ctl(enum runloop_ctl_state state, void *data)
          break;
       case RUNLOOP_CTL_IS_PERFCNT_ENABLE:
          return runloop_perfcnt_enable;
+      case RUNLOOP_CTL_SET_NONBLOCK_FORCED:
+         runloop_force_nonblock = true;
+         break;
+      case RUNLOOP_CTL_UNSET_NONBLOCK_FORCED:
+         runloop_force_nonblock = false;
+         break;
+      case RUNLOOP_CTL_IS_NONBLOCK_FORCED:
+         return runloop_force_nonblock;
+      case RUNLOOP_CTL_SET_FRAME_TIME:
+         {
+            const struct retro_frame_time_callback *info =
+               (const struct retro_frame_time_callback*)data;
+#ifdef HAVE_NETPLAY
+            global_t *global = global_get_ptr();
+
+            /* retro_run() will be called in very strange and
+             * mysterious ways, have to disable it. */
+            if (global->netplay.enable)
+               return false;
+#endif
+            runloop_frame_time = *info;
+         }
+         break;
+      case RUNLOOP_CTL_GET_FRAME_TIME:
+         {
+            struct retro_frame_time_callback **frame_time = 
+               (struct retro_frame_time_callback**)data;
+            if (!frame_time)
+               return false;
+            *frame_time = (struct retro_frame_time_callback*)&runloop_frame_time;
+         }
+         break;
       case RUNLOOP_CTL_GET_WINDOWED_SCALE:
          {
             unsigned **scale = (unsigned**)data;
@@ -1225,19 +1250,18 @@ int runloop_iterate(unsigned *sleep_ms)
    unsigned i;
    event_cmd_state_t    cmd;
    retro_time_t current, target, to_sleep_ms;
+   struct retro_frame_time_callback *frame_time = NULL;
    event_cmd_state_t   *cmd_ptr                 = &cmd;
    static retro_usec_t frame_time_last          = 0;
    static retro_time_t frame_limit_minimum_time = 0.0;
    static retro_time_t frame_limit_last_time    = 0.0;
    static retro_input_t last_input              = 0;
    settings_t *settings                         = config_get_ptr();
-   rarch_system_info_t *system                  = NULL;
 
    cmd.state[1]                                 = last_input;
    cmd.state[0]                                 = input_keys_pressed();
    last_input                                   = cmd.state[0];
 
-   runloop_ctl(RUNLOOP_CTL_SYSTEM_INFO_GET, &system);
 
    if (runloop_ctl(RUNLOOP_CTL_IS_FRAME_TIME_LAST, NULL))
    {
@@ -1274,8 +1298,10 @@ int runloop_iterate(unsigned *sleep_ms)
          input_driver_ctl(RARCH_INPUT_CTL_SET_FLUSHING_INPUT, NULL);
       }
    }
+   
+   runloop_ctl(RUNLOOP_CTL_GET_FRAME_TIME, &frame_time);
 
-   if (system->frame_time.callback)
+   if (frame_time->callback)
    {
       /* Updates frame timing if frame timing callback is in use by the core.
        * Limits frame time if fast forward ratio throttle is enabled. */
@@ -1288,7 +1314,7 @@ int runloop_iterate(unsigned *sleep_ms)
 
 
       if (!frame_time_last || is_locked_fps)
-         delta = system->frame_time.reference;
+         delta = frame_time->reference;
 
       if (!is_locked_fps && runloop_ctl(RUNLOOP_CTL_IS_SLOWMOTION, NULL))
          delta /= settings->slowmotion_ratio;
@@ -1298,7 +1324,7 @@ int runloop_iterate(unsigned *sleep_ms)
       if (is_locked_fps)
          frame_time_last = 0;
 
-      system->frame_time.callback(delta);
+      frame_time->callback(delta);
    }
 
    cmd.state[2]      = cmd.state[0] & ~cmd.state[1];  /* trigger  */
@@ -1400,8 +1426,7 @@ int runloop_iterate(unsigned *sleep_ms)
    if (bsv_movie_ctl(BSV_MOVIE_CTL_IS_INITED, NULL))
       bsv_movie_ctl(BSV_MOVIE_CTL_SET_FRAME_START, NULL);
 
-   if (system->camera_callback.caps)
-      driver_camera_poll();
+   camera_driver_ctl(RARCH_CAMERA_CTL_POLL, NULL);
 
    /* Update binds for analog dpad modes. */
    for (i = 0; i < settings->input.max_users; i++)

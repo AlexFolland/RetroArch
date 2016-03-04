@@ -5,6 +5,12 @@
 #include <assert.h>
 #include <stdarg.h>
 
+#ifdef RARCH_INTERNAL
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -851,7 +857,7 @@ static bool open_codecs(void)
 
                if (size)
                {
-                  ass_extra_data[subtitle_streams_num] = av_malloc(size);
+                  ass_extra_data[subtitle_streams_num] = (uint8_t*)av_malloc(size);
                   memcpy(ass_extra_data[subtitle_streams_num], (*s)->extradata, size);
                }
 

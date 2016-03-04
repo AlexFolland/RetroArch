@@ -68,10 +68,7 @@ enum
 
 #define MUI_SYSTEM_TAB_END MUI_SYSTEM_TAB_SETTINGS
 
-struct mui_texture_item
-{
-   uintptr_t id;
-};
+typedef uintptr_t mui_texture_item;
 
 typedef struct mui_handle
 {
@@ -91,8 +88,8 @@ typedef struct mui_handle
          float alpha;
       } arrow;
 
-      struct mui_texture_item bg;
-      struct mui_texture_item list[MUI_TEXTURE_LAST];
+      mui_texture_item bg;
+      mui_texture_item list[MUI_TEXTURE_LAST];
       uintptr_t white;
    } textures;
 
@@ -172,7 +169,7 @@ static void mui_context_reset_textures(mui_handle_t *mui,
 
       video_texture_image_load(&ti, path);
       video_driver_texture_load(&ti,
-            TEXTURE_FILTER_MIPMAP_LINEAR, &mui->textures.list[i].id);
+            TEXTURE_FILTER_MIPMAP_LINEAR, &mui->textures.list[i]);
 
       video_texture_image_free(&ti);
    }
@@ -247,7 +244,7 @@ static void mui_draw_tab(mui_handle_t *mui,
          break;
    }
 
-   mui_draw_icon(mui, mui->textures.list[tab_icon].id,
+   mui_draw_icon(mui, mui->textures.list[tab_icon],
          width / (MUI_SYSTEM_TAB_END+1) * (i+0.5) - mui->icon_size/2,
          height - mui->tabs_height,
          width, height, 0, 1, &pure_white[0]);
@@ -545,15 +542,15 @@ static void mui_render_label_value(mui_handle_t *mui,
 
    if (string_is_equal(value, "disabled") || string_is_equal(value, "off"))
    {
-      if (mui->textures.list[MUI_TEXTURE_SWITCH_OFF].id)
-         texture_switch = mui->textures.list[MUI_TEXTURE_SWITCH_OFF].id;
+      if (mui->textures.list[MUI_TEXTURE_SWITCH_OFF])
+         texture_switch = mui->textures.list[MUI_TEXTURE_SWITCH_OFF];
       else
          do_draw_text = true;
    }
    else if (string_is_equal(value, "enabled") || string_is_equal(value, "on"))
    {
-      if (mui->textures.list[MUI_TEXTURE_SWITCH_ON].id)
-         texture_switch = mui->textures.list[MUI_TEXTURE_SWITCH_ON].id;
+      if (mui->textures.list[MUI_TEXTURE_SWITCH_ON])
+         texture_switch = mui->textures.list[MUI_TEXTURE_SWITCH_ON];
       else
          do_draw_text = true;
    }
@@ -582,14 +579,14 @@ static void mui_render_label_value(mui_handle_t *mui,
          case MENU_VALUE_MOVIE:
             break;
          case MENU_VALUE_ON:
-            if (mui->textures.list[MUI_TEXTURE_SWITCH_ON].id)
-               texture_switch = mui->textures.list[MUI_TEXTURE_SWITCH_ON].id;
+            if (mui->textures.list[MUI_TEXTURE_SWITCH_ON])
+               texture_switch = mui->textures.list[MUI_TEXTURE_SWITCH_ON];
             else
                do_draw_text = true;
             break;
          case MENU_VALUE_OFF:
-            if (mui->textures.list[MUI_TEXTURE_SWITCH_OFF].id)
-               texture_switch = mui->textures.list[MUI_TEXTURE_SWITCH_OFF].id;
+            if (mui->textures.list[MUI_TEXTURE_SWITCH_OFF])
+               texture_switch = mui->textures.list[MUI_TEXTURE_SWITCH_OFF];
             else
                do_draw_text = true;
             break;
@@ -678,7 +675,7 @@ static void mui_draw_cursor(mui_handle_t *mui,
    draw.height      = 64;
    draw.coords      = &coords;
    draw.matrix_data = NULL;
-   draw.texture     = mui->textures.list[MUI_TEXTURE_POINTER].id;
+   draw.texture     = mui->textures.list[MUI_TEXTURE_POINTER];
    draw.prim_type   = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
 
    menu_display_ctl(MENU_DISPLAY_CTL_DRAW, &draw);
@@ -688,22 +685,17 @@ static void mui_draw_cursor(mui_handle_t *mui,
 
 static size_t mui_list_get_size(void *data, enum menu_list_type type)
 {
-   size_t list_size = 0;
-   (void)data;
-
    switch (type)
    {
       case MENU_LIST_PLAIN:
-         list_size  = menu_entries_get_stack_size(0);
-         break;
+         return menu_entries_get_stack_size(0);
       case MENU_LIST_TABS:
-         list_size = MUI_SYSTEM_TAB_END;
-         break;
+         return MUI_SYSTEM_TAB_END;
       default:
          break;
    }
 
-   return list_size;
+   return 0;
 }
 
 static void bgcolor_setalpha(float *bg, float alpha)
@@ -863,7 +855,7 @@ static void mui_frame(void *data)
 
       menu_display_ctl(MENU_DISPLAY_CTL_CLEAR_COLOR, &clearcolor);
 
-      if (mui->textures.bg.id)
+      if (mui->textures.bg)
       {
          background_rendered = true;
 
@@ -874,7 +866,7 @@ static void mui_frame(void *data)
 
          draw.width              = width;
          draw.height             = height;
-         draw.texture            = mui->textures.bg.id;
+         draw.texture            = mui->textures.bg;
          draw.handle_alpha       = 0.75f;
          draw.force_transparency = true;
          draw.color              = &white_transp_bg[0];
@@ -943,7 +935,7 @@ static void mui_frame(void *data)
    if (menu_entries_ctl(MENU_ENTRIES_CTL_SHOW_BACK, NULL))
    {
       title_margin = mui->icon_size;
-      mui_draw_icon(mui, mui->textures.list[MUI_TEXTURE_BACK].id,
+      mui_draw_icon(mui, mui->textures.list[MUI_TEXTURE_BACK],
          0, 0, width, height, 0, 1, &pure_white[0]);
    }
 
@@ -1151,7 +1143,7 @@ static void mui_context_bg_destroy(mui_handle_t *mui)
    if (!mui)
       return;
 
-   video_driver_texture_unload(&mui->textures.bg.id);
+   video_driver_texture_unload(&mui->textures.bg);
    video_driver_texture_unload(&mui->textures.white);
 }
 
@@ -1164,7 +1156,7 @@ static void mui_context_destroy(void *data)
       return;
 
    for (i = 0; i < MUI_TEXTURE_LAST; i++)
-      video_driver_texture_unload(&mui->textures.list[i].id);
+      video_driver_texture_unload(&mui->textures.list[i]);
 
    menu_display_ctl(MENU_DISPLAY_CTL_FONT_MAIN_DEINIT, NULL);
 
@@ -1182,7 +1174,7 @@ static bool mui_load_image(void *userdata, void *data, enum menu_image_type type
       case MENU_IMAGE_WALLPAPER:
          mui_context_bg_destroy(mui);
          video_driver_texture_load(data,
-               TEXTURE_FILTER_MIPMAP_LINEAR, &mui->textures.bg.id);
+               TEXTURE_FILTER_MIPMAP_LINEAR, &mui->textures.bg);
          mui_allocate_white_texture(mui);
          break;
       case MENU_IMAGE_BOXART:
@@ -1394,6 +1386,7 @@ static void mui_list_cache(void *data,
 static int mui_list_push(void *data, void *userdata,
       menu_displaylist_info_t *info, unsigned type)
 {
+   menu_displaylist_ctx_parse_entry_t entry;
    int ret                = -1;
    core_info_list_t *list = NULL;
    menu_handle_t *menu    = (menu_handle_t*)data;
@@ -1430,55 +1423,66 @@ static int mui_list_push(void *data, void *userdata,
       case DISPLAYLIST_MAIN_MENU:
          menu_entries_ctl(MENU_ENTRIES_CTL_CLEAR, info->list);
 
+         entry.data            = menu;
+         entry.info            = info;
+         entry.parse_type      = PARSE_ACTION;
+         entry.add_empty_entry = false;
+
          if (!rarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL))
          {
-            menu_displaylist_parse_settings(menu, info,
-                  menu_hash_to_str(MENU_LABEL_CONTENT_SETTINGS), PARSE_ACTION, false);
+            entry.info_label      = menu_hash_to_str(MENU_LABEL_CONTENT_SETTINGS);
+            menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
          }
 
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_START_CORE), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_START_CORE);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 
 #ifndef HAVE_DYNAMIC
          if (frontend_driver_has_fork())
 #endif
          {
-            menu_displaylist_parse_settings(menu, info,
-                  menu_hash_to_str(MENU_LABEL_CORE_LIST), PARSE_ACTION, false);
+            entry.info_label      = menu_hash_to_str(MENU_LABEL_CORE_LIST);
+            menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
          }
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_LOAD_CONTENT_LIST), PARSE_ACTION, false);
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_LOAD_CONTENT_HISTORY), PARSE_ACTION, false);
+
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_LOAD_CONTENT_LIST);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
+
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_LOAD_CONTENT_HISTORY);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
+
 #if defined(HAVE_NETWORKING)
 #if defined(HAVE_LIBRETRODB)
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_ADD_CONTENT_LIST), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_ADD_CONTENT_LIST);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #endif
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_ONLINE_UPDATER), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_ONLINE_UPDATER);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #endif
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_INFORMATION_LIST), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_INFORMATION_LIST);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #ifndef HAVE_DYNAMIC
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_RESTART_RETROARCH), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_RESTART_RETROARCH);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #endif
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_CONFIGURATIONS), PARSE_ACTION, false);
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_SAVE_CURRENT_CONFIG), PARSE_ACTION, false);
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_SAVE_NEW_CONFIG), PARSE_ACTION, false);
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_HELP_LIST), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_CONFIGURATIONS);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
+
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_SAVE_CURRENT_CONFIG);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
+
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_SAVE_NEW_CONFIG);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
+
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_HELP_LIST);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #if !defined(IOS)
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_QUIT_RETROARCH), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_QUIT_RETROARCH);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #endif
 #if defined(HAVE_LAKKA)
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_SHUTDOWN), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_SHUTDOWN);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #endif
          info->need_push    = true;
          ret = 0;

@@ -158,7 +158,8 @@ enum rarch_display_ctl_state
    RARCH_DISPLAY_CTL_GPU_RECORD_DEINIT,
    RARCH_DISPLAY_CTL_GET_CURRENT_SOFTWARE_FRAMEBUFFER,
    RARCH_DISPLAY_CTL_GET_HW_RENDER_INTERFACE,
-   RARCH_DISPLAY_CTL_VIEWPORT_INFO
+   RARCH_DISPLAY_CTL_VIEWPORT_INFO,
+   RARCH_DISPLAY_CTL_SET_TITLE_BUF
 };
 
 typedef struct video_info
@@ -427,8 +428,6 @@ void video_driver_set_size(unsigned *width, unsigned *height);
 float video_driver_get_aspect_ratio(void);
 
 void video_driver_set_aspect_ratio_value(float value);
-
-struct retro_hw_render_callback *video_driver_callback(void);
 
 rarch_softfilter_t *video_driver_frame_filter_get_ptr(void);
 

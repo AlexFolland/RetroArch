@@ -1,7 +1,7 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
- * The following license statement only applies to this file (retro_inline.h).
+ * The following license statement only applies to this file (compat_fnmatch.c).
  * ---------------------------------------------------------------------------------------
  *
  * Permission is hereby granted, free of charge,
@@ -20,20 +20,30 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __LIBRETRO_SDK_INLINE_H
-#define __LIBRETRO_SDK_INLINE_H
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-#ifndef INLINE
+#include <net/net_ifinfo.h>
 
-#if defined(_WIN32)
-#define INLINE __inline
-#elif defined(__STDC_VERSION__) && __STDC_VERSION__>=199901L
-#define INLINE inline
-#elif defined(__GNUC__)
-#define INLINE __inline__
-#else
-#define INLINE
-#endif
+int main(int argc, const char *argv[])
+{
+   unsigned k              = 0;
+   net_ifinfo_t *list = 
+      (net_ifinfo_t*)calloc(1, sizeof(*list));
 
-#endif
-#endif
+   if (!list)
+      return -1;
+
+   if (!net_ifinfo_new(list))
+      return -1;
+
+   for (k = 0; k < list->size; k++)
+   {
+      printf("%s:%s\n", list->entries[k].name, list->entries[k].host);
+   }
+
+   net_ifinfo_free(list);
+
+   return 0;
+}

@@ -200,16 +200,13 @@ bool driver_find_next(const char *label, char *s, size_t len)
 
 static void driver_adjust_system_rates(void)
 {
-   rarch_system_info_t *system = NULL;
-   
-   runloop_ctl(RUNLOOP_CTL_SYSTEM_INFO_GET, &system);
    audio_driver_ctl(RARCH_AUDIO_CTL_MONITOR_ADJUST_SYSTEM_RATES,   NULL);
    video_driver_ctl(RARCH_DISPLAY_CTL_MONITOR_ADJUST_SYSTEM_RATES, NULL);
 
    if (!video_driver_get_ptr(false))
       return;
 
-   if (system->force_nonblock)
+   if (runloop_ctl(RUNLOOP_CTL_IS_NONBLOCK_FORCED, NULL))
       event_cmd_ctl(EVENT_CMD_VIDEO_SET_NONBLOCKING_STATE, NULL);
    else
       driver_ctl(RARCH_DRIVER_CTL_SET_NONBLOCK_STATE, NULL);
@@ -225,12 +222,9 @@ static void driver_adjust_system_rates(void)
  **/
 static void driver_set_nonblock_state(void)
 {
-   rarch_system_info_t *system = NULL;
    settings_t        *settings = config_get_ptr();
    bool                 enable = input_driver_ctl(
          RARCH_INPUT_CTL_IS_NONBLOCK_STATE, NULL);
-
-   runloop_ctl(RUNLOOP_CTL_SYSTEM_INFO_GET, &system);
 
    /* Only apply non-block-state for video if we're using vsync. */
    if (video_driver_ctl(RARCH_DISPLAY_CTL_IS_ACTIVE, NULL) 
@@ -238,7 +232,8 @@ static void driver_set_nonblock_state(void)
    {
       bool video_nonblock = enable;
 
-      if (!settings->video.vsync || system->force_nonblock)
+      if (     !settings->video.vsync 
+            || runloop_ctl(RUNLOOP_CTL_IS_NONBLOCK_FORCED, NULL))
          video_nonblock = true;
       video_driver_ctl(RARCH_DISPLAY_CTL_SET_NONBLOCK_STATE, &video_nonblock);
    }
@@ -332,15 +327,15 @@ static void init_drivers(int flags)
 
    if (flags & DRIVER_VIDEO)
    {
-      const struct retro_hw_render_callback *hw_render = 
-         (const struct retro_hw_render_callback*)video_driver_callback();
+      struct retro_hw_render_callback *hwr = NULL;
+      video_driver_ctl(RARCH_DISPLAY_CTL_HW_CONTEXT_GET, &hwr);
 
       video_driver_ctl(RARCH_DISPLAY_CTL_MONITOR_RESET, NULL);
       video_driver_ctl(RARCH_DISPLAY_CTL_INIT, NULL);
 
       if (!video_driver_ctl(RARCH_DISPLAY_CTL_IS_VIDEO_CACHE_CONTEXT_ACK, NULL)
-            && hw_render->context_reset)
-         hw_render->context_reset();
+            && hwr->context_reset)
+         hwr->context_reset();
       video_driver_ctl(RARCH_DISPLAY_CTL_UNSET_VIDEO_CACHE_CONTEXT_ACK, NULL);
 
       runloop_ctl(RUNLOOP_CTL_SET_FRAME_TIME_LAST, NULL);
@@ -351,7 +346,7 @@ static void init_drivers(int flags)
 
    /* Only initialize camera driver if we're ever going to use it. */
    if ((flags & DRIVER_CAMERA) && camera_driver_ctl(RARCH_CAMERA_CTL_IS_ACTIVE, NULL))
-      init_camera();
+      camera_driver_ctl(RARCH_CAMERA_CTL_INIT, NULL);
 
    /* Only initialize location driver if we're ever going to use it. */
    if ((flags & DRIVER_LOCATION) && location_driver_ctl(RARCH_LOCATION_CTL_IS_ACTIVE, NULL))
@@ -464,7 +459,7 @@ bool driver_ctl(enum driver_ctl_state state, void *data)
          audio_driver_ctl(RARCH_AUDIO_CTL_FIND_DRIVER, NULL);
          video_driver_ctl(RARCH_DISPLAY_CTL_FIND_DRIVER, NULL);
          input_driver_ctl(RARCH_INPUT_CTL_FIND_DRIVER, NULL);
-         find_camera_driver();
+         camera_driver_ctl(RARCH_CAMERA_CTL_FIND_DRIVER, NULL);
          find_location_driver();
 #ifdef HAVE_MENU
          menu_driver_ctl(RARCH_MENU_CTL_FIND_DRIVER, NULL);

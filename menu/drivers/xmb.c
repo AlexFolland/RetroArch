@@ -134,10 +134,7 @@ enum
 #define XMB_SYSTEM_TAB_END XMB_SYSTEM_TAB_HISTORY
 #endif
 
-struct xmb_texture_item
-{
-   uintptr_t id;
-};
+typedef uintptr_t xmb_texture_item;
 
 typedef struct xmb_handle
 {
@@ -193,8 +190,8 @@ typedef struct xmb_handle
          float alpha;
       } arrow;
 
-      struct xmb_texture_item bg;
-      struct xmb_texture_item list[XMB_TEXTURE_LAST];
+      xmb_texture_item bg;
+      xmb_texture_item list[XMB_TEXTURE_LAST];
    } textures;
 
    struct
@@ -269,23 +266,21 @@ static size_t xmb_list_get_selection(void *data)
 
 static size_t xmb_list_get_size(void *data, enum menu_list_type type)
 {
-   size_t list_size        = 0;
    xmb_handle_t *xmb       = (xmb_handle_t*)data;
 
    switch (type)
    {
       case MENU_LIST_PLAIN:
-         list_size  = menu_entries_get_stack_size(0);
-         break;
+         return menu_entries_get_stack_size(0);
       case MENU_LIST_HORIZONTAL:
          if (xmb && xmb->horizontal_list)
-            list_size = file_list_get_size(xmb->horizontal_list);
+            return file_list_get_size(xmb->horizontal_list);
          break;
       case MENU_LIST_TABS:
-         list_size = XMB_SYSTEM_TAB_END;
+         return XMB_SYSTEM_TAB_END;
    }
 
-   return list_size;
+   return 0;
 }
 
 static void *xmb_list_get_entry(void *data, enum menu_list_type type, unsigned i)
@@ -1395,64 +1390,64 @@ static uintptr_t xmb_icon_get_id(xmb_handle_t *xmb,
    switch(type)
    {
       case MENU_FILE_DIRECTORY:
-         return xmb->textures.list[XMB_TEXTURE_FOLDER].id;
+         return xmb->textures.list[XMB_TEXTURE_FOLDER];
       case MENU_FILE_PLAIN:
-         return xmb->textures.list[XMB_TEXTURE_FILE].id;
+         return xmb->textures.list[XMB_TEXTURE_FILE];
       case MENU_FILE_RPL_ENTRY:
          if (core_node)
             return core_node->content_icon;
-         return xmb->textures.list[XMB_TEXTURE_FILE].id;
+         return xmb->textures.list[XMB_TEXTURE_FILE];
       case MENU_FILE_CARCHIVE:
-         return xmb->textures.list[XMB_TEXTURE_ZIP].id;
+         return xmb->textures.list[XMB_TEXTURE_ZIP];
       case MENU_FILE_MUSIC:
-         return xmb->textures.list[XMB_TEXTURE_MUSIC].id;
+         return xmb->textures.list[XMB_TEXTURE_MUSIC];
       case MENU_FILE_IMAGEVIEWER:
-         return xmb->textures.list[XMB_TEXTURE_IMAGE].id;
+         return xmb->textures.list[XMB_TEXTURE_IMAGE];
       case MENU_FILE_MOVIE:
-         return xmb->textures.list[XMB_TEXTURE_MOVIE].id;
+         return xmb->textures.list[XMB_TEXTURE_MOVIE];
       case MENU_FILE_CORE:
-         return xmb->textures.list[XMB_TEXTURE_CORE].id;
+         return xmb->textures.list[XMB_TEXTURE_CORE];
       case MENU_FILE_RDB:
-         return xmb->textures.list[XMB_TEXTURE_RDB].id;
+         return xmb->textures.list[XMB_TEXTURE_RDB];
       case MENU_FILE_CURSOR:
-         return xmb->textures.list[XMB_TEXTURE_CURSOR].id;
+         return xmb->textures.list[XMB_TEXTURE_CURSOR];
       case MENU_FILE_PLAYLIST_ENTRY:
       case MENU_SETTING_ACTION_RUN:
-         return xmb->textures.list[XMB_TEXTURE_RUN].id;
+         return xmb->textures.list[XMB_TEXTURE_RUN];
       case MENU_SETTING_ACTION_CLOSE:
-         return xmb->textures.list[XMB_TEXTURE_CLOSE].id;
+         return xmb->textures.list[XMB_TEXTURE_CLOSE];
       case MENU_SETTING_ACTION_SAVESTATE:
-         return xmb->textures.list[XMB_TEXTURE_SAVESTATE].id;
+         return xmb->textures.list[XMB_TEXTURE_SAVESTATE];
       case MENU_SETTING_ACTION_LOADSTATE:
-         return xmb->textures.list[XMB_TEXTURE_LOADSTATE].id;
+         return xmb->textures.list[XMB_TEXTURE_LOADSTATE];
       case MENU_FILE_RDB_ENTRY:
       case MENU_SETTING_ACTION_CORE_INFORMATION:
-         return xmb->textures.list[XMB_TEXTURE_CORE_INFO].id;
+         return xmb->textures.list[XMB_TEXTURE_CORE_INFO];
       case MENU_SETTING_ACTION_CORE_OPTIONS:
-         return xmb->textures.list[XMB_TEXTURE_CORE_OPTIONS].id;
+         return xmb->textures.list[XMB_TEXTURE_CORE_OPTIONS];
       case MENU_SETTING_ACTION_CORE_INPUT_REMAPPING_OPTIONS:
-         return xmb->textures.list[XMB_TEXTURE_INPUT_REMAPPING_OPTIONS].id;
+         return xmb->textures.list[XMB_TEXTURE_INPUT_REMAPPING_OPTIONS];
       case MENU_SETTING_ACTION_CORE_CHEAT_OPTIONS:
-         return xmb->textures.list[XMB_TEXTURE_CHEAT_OPTIONS].id;
+         return xmb->textures.list[XMB_TEXTURE_CHEAT_OPTIONS];
       case MENU_SETTING_ACTION_CORE_DISK_OPTIONS:
-         return xmb->textures.list[XMB_TEXTURE_DISK_OPTIONS].id;
+         return xmb->textures.list[XMB_TEXTURE_DISK_OPTIONS];
       case MENU_SETTING_ACTION_CORE_SHADER_OPTIONS:
-         return xmb->textures.list[XMB_TEXTURE_SHADER_OPTIONS].id;
+         return xmb->textures.list[XMB_TEXTURE_SHADER_OPTIONS];
       case MENU_SETTING_ACTION_SCREENSHOT:
-         return xmb->textures.list[XMB_TEXTURE_SCREENSHOT].id;
+         return xmb->textures.list[XMB_TEXTURE_SCREENSHOT];
       case MENU_SETTING_ACTION_RESET:
-         return xmb->textures.list[XMB_TEXTURE_RELOAD].id;
+         return xmb->textures.list[XMB_TEXTURE_RELOAD];
       case MENU_SETTING_ACTION:
          if (xmb->depth == 3)
-            return xmb->textures.list[XMB_TEXTURE_SUBSETTING].id;
-         return xmb->textures.list[XMB_TEXTURE_SETTING].id;
+            return xmb->textures.list[XMB_TEXTURE_SUBSETTING];
+         return xmb->textures.list[XMB_TEXTURE_SETTING];
       case MENU_SETTING_GROUP:
-         return xmb->textures.list[XMB_TEXTURE_SETTING].id;
+         return xmb->textures.list[XMB_TEXTURE_SETTING];
       case MENU_INFO_MESSAGE:
-         return xmb->textures.list[XMB_TEXTURE_CORE_INFO].id;
+         return xmb->textures.list[XMB_TEXTURE_CORE_INFO];
    }
 
-   return xmb->textures.list[XMB_TEXTURE_SUBSETTING].id;
+   return xmb->textures.list[XMB_TEXTURE_SUBSETTING];
 }
 
 static void xmb_draw_items(xmb_handle_t *xmb,
@@ -1542,53 +1537,53 @@ static void xmb_draw_items(xmb_handle_t *xmb,
       switch (hash_label)
       {
          case MENU_LABEL_CORE_OPTIONS:
-            icon = xmb->textures.list[XMB_TEXTURE_CORE_OPTIONS].id;
+            icon = xmb->textures.list[XMB_TEXTURE_CORE_OPTIONS];
             break;
          case MENU_LABEL_CORE_INPUT_REMAPPING_OPTIONS:
-            icon = xmb->textures.list[XMB_TEXTURE_INPUT_REMAPPING_OPTIONS].id;
+            icon = xmb->textures.list[XMB_TEXTURE_INPUT_REMAPPING_OPTIONS];
             break;
          case MENU_LABEL_CORE_CHEAT_OPTIONS:
-            icon = xmb->textures.list[XMB_TEXTURE_CHEAT_OPTIONS].id;
+            icon = xmb->textures.list[XMB_TEXTURE_CHEAT_OPTIONS];
             break;
          case MENU_LABEL_DISK_OPTIONS:
-            icon = xmb->textures.list[XMB_TEXTURE_DISK_OPTIONS].id;
+            icon = xmb->textures.list[XMB_TEXTURE_DISK_OPTIONS];
             break;
          case MENU_LABEL_SHADER_OPTIONS:
-            icon = xmb->textures.list[XMB_TEXTURE_SHADER_OPTIONS].id;
+            icon = xmb->textures.list[XMB_TEXTURE_SHADER_OPTIONS];
             break;
          case MENU_LABEL_ACHIEVEMENT_LIST:
-            icon = xmb->textures.list[XMB_TEXTURE_ACHIEVEMENT_LIST].id;
+            icon = xmb->textures.list[XMB_TEXTURE_ACHIEVEMENT_LIST];
             break;
          case MENU_LABEL_SAVESTATE:
-            icon = xmb->textures.list[XMB_TEXTURE_SAVESTATE].id;
+            icon = xmb->textures.list[XMB_TEXTURE_SAVESTATE];
             break;
          case MENU_LABEL_LOADSTATE:
-            icon = xmb->textures.list[XMB_TEXTURE_LOADSTATE].id;
+            icon = xmb->textures.list[XMB_TEXTURE_LOADSTATE];
             break;
          case MENU_LABEL_TAKE_SCREENSHOT:
-            icon = xmb->textures.list[XMB_TEXTURE_SCREENSHOT].id;
+            icon = xmb->textures.list[XMB_TEXTURE_SCREENSHOT];
             break;
          case MENU_LABEL_RESTART_CONTENT:
-            icon = xmb->textures.list[XMB_TEXTURE_RELOAD].id;
+            icon = xmb->textures.list[XMB_TEXTURE_RELOAD];
             break;
          case MENU_LABEL_RESUME_CONTENT:
-            icon = xmb->textures.list[XMB_TEXTURE_RESUME].id;
+            icon = xmb->textures.list[XMB_TEXTURE_RESUME];
             break;
       }
 
       if (string_is_equal(entry.value, "disabled") ||
             string_is_equal(entry.value, "off"))
       {
-         if (xmb->textures.list[XMB_TEXTURE_SWITCH_OFF].id)
-            texture_switch = xmb->textures.list[XMB_TEXTURE_SWITCH_OFF].id;
+         if (xmb->textures.list[XMB_TEXTURE_SWITCH_OFF])
+            texture_switch = xmb->textures.list[XMB_TEXTURE_SWITCH_OFF];
          else
             do_draw_text = true;
       }
       else if (string_is_equal(entry.value, "enabled") ||
             string_is_equal(entry.value, "on"))
       {
-         if (xmb->textures.list[XMB_TEXTURE_SWITCH_ON].id)
-            texture_switch = xmb->textures.list[XMB_TEXTURE_SWITCH_ON].id;
+         if (xmb->textures.list[XMB_TEXTURE_SWITCH_ON])
+            texture_switch = xmb->textures.list[XMB_TEXTURE_SWITCH_ON];
          else
             do_draw_text = true;
       }
@@ -1617,14 +1612,14 @@ static void xmb_draw_items(xmb_handle_t *xmb,
             case MENU_VALUE_MOVIE:
                break;
             case MENU_VALUE_ON:
-               if (xmb->textures.list[XMB_TEXTURE_SWITCH_ON].id)
-                  texture_switch = xmb->textures.list[XMB_TEXTURE_SWITCH_ON].id;
+               if (xmb->textures.list[XMB_TEXTURE_SWITCH_ON])
+                  texture_switch = xmb->textures.list[XMB_TEXTURE_SWITCH_ON];
                else
                   do_draw_text = true;
                break;
             case MENU_VALUE_OFF:
-               if (xmb->textures.list[XMB_TEXTURE_SWITCH_OFF].id)
-                  texture_switch = xmb->textures.list[XMB_TEXTURE_SWITCH_OFF].id;
+               if (xmb->textures.list[XMB_TEXTURE_SWITCH_OFF])
+                  texture_switch = xmb->textures.list[XMB_TEXTURE_SWITCH_OFF];
                else
                   do_draw_text = true;
                break;
@@ -1732,7 +1727,7 @@ static void xmb_draw_cursor(xmb_handle_t *xmb,
    draw.height      = xmb->cursor.size;
    draw.coords      = &coords;
    draw.matrix_data = NULL;
-   draw.texture     = xmb->textures.list[XMB_TEXTURE_POINTER].id;
+   draw.texture     = xmb->textures.list[XMB_TEXTURE_POINTER];
    draw.prim_type   = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
 
    menu_display_ctl(MENU_DISPLAY_CTL_DRAW, &draw);
@@ -1891,7 +1886,7 @@ static void xmb_frame(void *data)
 
    draw.width              = width;
    draw.height             = height;
-   draw.texture            = xmb->textures.bg.id;
+   draw.texture            = xmb->textures.bg;
    draw.handle_alpha       = xmb->alpha;
    draw.force_transparency = false;
    draw.color              = &coord_color[0];
@@ -1966,8 +1961,10 @@ static void xmb_frame(void *data)
       coord_color2[15]  = (1.00f > xmb->alpha) ? xmb->alpha : 1.00f;
 
    if (settings->menu.timedate_enable && coord_color2[3] != 0)
-      xmb_draw_icon_predone(xmb, &mymat, xmb->textures.list[XMB_TEXTURE_CLOCK].id,
-            width - xmb->icon.size, xmb->icon.size, width, height, 1, 0, 1, &coord_color2[0]);
+      xmb_draw_icon_predone(xmb, &mymat,
+            xmb->textures.list[XMB_TEXTURE_CLOCK],
+            width - xmb->icon.size, xmb->icon.size,width,
+            height, 1, 0, 1, &coord_color2[0]);
 
    /* set alpha components of colors */
    coord_color2[3]  = coord_color2[7]  = coord_color2[11]  = 
@@ -1978,7 +1975,7 @@ static void xmb_frame(void *data)
       xmb_draw_icon_predone(
             xmb,
             &mymat,
-            xmb->textures.list[XMB_TEXTURE_ARROW].id,
+            xmb->textures.list[XMB_TEXTURE_ARROW],
             xmb->x + xmb->margins.screen.left + 
             xmb->icon.spacing.horizontal - xmb->icon.size / 2.0 + xmb->icon.size,
             xmb->margins.screen.top + 
@@ -2021,7 +2018,7 @@ static void xmb_frame(void *data)
 
       draw.width              = width;
       draw.height             = height;
-      draw.texture            = xmb->textures.bg.id;
+      draw.texture            = xmb->textures.bg;
       draw.handle_alpha       = xmb->alpha;
       draw.force_transparency = true;
       draw.color              = &coord_color[0];
@@ -2269,7 +2266,7 @@ static void xmb_context_bg_destroy(xmb_handle_t *xmb)
 {
    if (!xmb)
       return;
-   video_driver_texture_unload(&xmb->textures.bg.id);
+   video_driver_texture_unload(&xmb->textures.bg);
 }
 
 static bool xmb_load_image(void *userdata, void *data, enum menu_image_type type)
@@ -2287,7 +2284,7 @@ static bool xmb_load_image(void *userdata, void *data, enum menu_image_type type
          xmb_context_bg_destroy(xmb);
          video_driver_texture_load(data,
                TEXTURE_FILTER_MIPMAP_LINEAR,
-               &xmb->textures.bg.id);
+               &xmb->textures.bg);
          break;
       case MENU_IMAGE_BOXART:
          {
@@ -2435,24 +2432,24 @@ static void xmb_context_reset_textures(
 
       video_driver_texture_load(&ti,
             TEXTURE_FILTER_MIPMAP_LINEAR,
-            &xmb->textures.list[i].id);
+            &xmb->textures.list[i]);
 
       video_texture_image_free(&ti);
    }
 
-   xmb->main_menu_node.icon  = xmb->textures.list[XMB_TEXTURE_MAIN_MENU].id;
+   xmb->main_menu_node.icon  = xmb->textures.list[XMB_TEXTURE_MAIN_MENU];
    xmb->main_menu_node.alpha = XMB_CATEGORIES_ACTIVE_ALPHA;
    xmb->main_menu_node.zoom  = XMB_CATEGORIES_ACTIVE_ZOOM;
 
-   xmb->settings_tab_node.icon  = xmb->textures.list[XMB_TEXTURE_SETTINGS].id;
+   xmb->settings_tab_node.icon  = xmb->textures.list[XMB_TEXTURE_SETTINGS];
    xmb->settings_tab_node.alpha = XMB_CATEGORIES_ACTIVE_ALPHA;
    xmb->settings_tab_node.zoom  = XMB_CATEGORIES_ACTIVE_ZOOM;
 
-   xmb->history_tab_node.icon  = xmb->textures.list[XMB_TEXTURE_HISTORY].id;
+   xmb->history_tab_node.icon  = xmb->textures.list[XMB_TEXTURE_HISTORY];
    xmb->history_tab_node.alpha = XMB_CATEGORIES_ACTIVE_ALPHA;
    xmb->history_tab_node.zoom  = XMB_CATEGORIES_ACTIVE_ZOOM;
 
-   xmb->add_tab_node.icon  = xmb->textures.list[XMB_TEXTURE_ADD].id;
+   xmb->add_tab_node.icon  = xmb->textures.list[XMB_TEXTURE_ADD];
    xmb->add_tab_node.alpha = XMB_CATEGORIES_ACTIVE_ALPHA;
    xmb->add_tab_node.zoom  = XMB_CATEGORIES_ACTIVE_ZOOM;
 }
@@ -2759,7 +2756,7 @@ static void xmb_context_destroy(void *data)
       return;
 
    for (i = 0; i < XMB_TEXTURE_LAST; i++)
-      video_driver_texture_unload(&xmb->textures.list[i].id);
+      video_driver_texture_unload(&xmb->textures.list[i]);
 
    xmb_context_destroy_horizontal_list(xmb);
    xmb_context_bg_destroy(xmb);
@@ -2841,6 +2838,7 @@ static int xmb_list_bind_init(menu_file_list_cbs_t *cbs,
 static int xmb_list_push(void *data, void *userdata,
       menu_displaylist_info_t *info, unsigned type)
 {
+   menu_displaylist_ctx_parse_entry_t entry;
    int ret = -1;
    menu_handle_t *menu   = (menu_handle_t*)data;
 
@@ -2849,55 +2847,65 @@ static int xmb_list_push(void *data, void *userdata,
       case DISPLAYLIST_MAIN_MENU:
          menu_entries_ctl(MENU_ENTRIES_CTL_CLEAR, info->list);
 
+         entry.data            = menu;
+         entry.info            = info;
+         entry.parse_type      = PARSE_ACTION;
+         entry.add_empty_entry = false;
+
          if (!rarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL))
          {
-            menu_displaylist_parse_settings(menu, info,
-                  menu_hash_to_str(MENU_LABEL_CONTENT_SETTINGS),
-                  PARSE_ACTION, false);
+            entry.info_label      = menu_hash_to_str(MENU_LABEL_CONTENT_SETTINGS);
+            menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
          }
 
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_START_CORE), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_START_CORE);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 
 #ifndef HAVE_DYNAMIC
          if (frontend_driver_has_fork())
 #endif
          {
-            menu_displaylist_parse_settings(menu, info,
-                  menu_hash_to_str(MENU_LABEL_CORE_LIST), PARSE_ACTION, false);
+            entry.info_label      = menu_hash_to_str(MENU_LABEL_CORE_LIST);
+            menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
          }
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_LOAD_CONTENT_LIST), PARSE_ACTION, false);
+
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_LOAD_CONTENT_LIST);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
+
 #if defined(HAVE_NETWORKING)
 #if defined(HAVE_LIBRETRODB)
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_ADD_CONTENT_LIST), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_ADD_CONTENT_LIST);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #endif
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_ONLINE_UPDATER), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_ONLINE_UPDATER);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #endif
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_INFORMATION_LIST), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_INFORMATION_LIST);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #ifndef HAVE_DYNAMIC
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_RESTART_RETROARCH), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_RESTART_RETROARCH);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #endif
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_CONFIGURATIONS), PARSE_ACTION, false);
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_SAVE_CURRENT_CONFIG), PARSE_ACTION, false);
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_SAVE_NEW_CONFIG), PARSE_ACTION, false);
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_HELP_LIST), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_CONFIGURATIONS);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
+
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_SAVE_CURRENT_CONFIG);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
+
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_SAVE_NEW_CONFIG);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
+
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_HELP_LIST);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #if !defined(IOS)
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_QUIT_RETROARCH), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_QUIT_RETROARCH);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
 #endif
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_SHUTDOWN), PARSE_ACTION, false);
-         menu_displaylist_parse_settings(menu, info,
-               menu_hash_to_str(MENU_LABEL_REBOOT), PARSE_ACTION, false);
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_SHUTDOWN);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
+
+         entry.info_label      = menu_hash_to_str(MENU_LABEL_REBOOT);
+         menu_displaylist_ctl(DISPLAYLIST_SETTING, &entry);
          info->need_push    = true;
          ret = 0;
          break;

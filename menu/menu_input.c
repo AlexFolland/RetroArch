@@ -102,13 +102,8 @@ typedef struct menu_input
       int16_t y;
       int16_t dx;
       int16_t dy;
-      int16_t start_x;
-      int16_t start_y;
       float accel;
-      float accel0;
-      float accel1;
       bool pressed[2];
-      bool dragging;
       bool back;
       unsigned ptr;
    } pointer;
@@ -640,9 +635,10 @@ static bool menu_input_key_bind_iterate(char *s, size_t len)
 bool menu_input_ctl(enum menu_input_ctl_state state, void *data)
 {
    static char menu_input_keyboard_label_setting[256];
-   menu_input_t *menu_input = menu_input_get_ptr();
-   static const char *menu_input_keyboard_label = NULL;
    static const char **menu_input_keyboard_buffer;
+   static const char *menu_input_keyboard_label = NULL;
+   static bool pointer_dragging                 = false;
+   menu_input_t *menu_input                     = menu_input_get_ptr();
 
    if (!menu_input)
       return false;
@@ -678,6 +674,7 @@ bool menu_input_ctl(enum menu_input_ctl_state state, void *data)
          break;
       case MENU_INPUT_CTL_DEINIT:
          memset(menu_input, 0, sizeof(menu_input_t));
+         pointer_dragging      = false;
          break;
       case MENU_INPUT_CTL_SEARCH_START:
          {
@@ -716,11 +713,13 @@ bool menu_input_ctl(enum menu_input_ctl_state state, void *data)
             menu_input->pointer.accel = *ptr;
          }
          break;
-      case MENU_INPUT_CTL_POINTER_DRAGGING:
-         {
-            bool *ptr = (bool*)data;
-            *ptr = menu_input->pointer.dragging;
-         }
+      case MENU_INPUT_CTL_IS_POINTER_DRAGGED:
+         return pointer_dragging;
+      case MENU_INPUT_CTL_SET_POINTER_DRAGGED:
+         pointer_dragging = true;
+         break;
+      case MENU_INPUT_CTL_UNSET_POINTER_DRAGGED:
+         pointer_dragging = false;
          break;
       case MENU_INPUT_CTL_KEYBOARD_DISPLAY:
          {
@@ -782,7 +781,6 @@ bool menu_input_ctl(enum menu_input_ctl_state state, void *data)
                return false;
             return menu_input_key_bind_iterate(bind->s, bind->len);
          }
-         break;
       case MENU_INPUT_CTL_START_LINE:
          {
             bool keyboard_display       = true;
@@ -1022,12 +1020,8 @@ int16_t menu_input_pointer_state(enum menu_input_pointer_state state)
 
 int16_t menu_input_mouse_state(enum menu_input_mouse_state state)
 {
-   menu_input_t *menu = menu_input_get_ptr();
-   unsigned type = 0;
+   unsigned type   = 0;
    unsigned device = RETRO_DEVICE_MOUSE;
-
-   if (!menu)
-      return 0;
 
    switch (state)
    {
@@ -1072,6 +1066,8 @@ static int menu_input_pointer_post_iterate(
    size_t selection;
    static bool pointer_oldpressed[2];
    static bool pointer_oldback  = false;
+   static int16_t start_x       = 0;
+   static int16_t start_y       = 0;
    static int16_t pointer_old_x = 0;
    static int16_t pointer_old_y = 0;
    int ret                      = 0;
@@ -1100,8 +1096,10 @@ static int menu_input_pointer_post_iterate(
    {
       gfx_ctx_metrics_t metrics;
       float dpi;
-      int16_t pointer_x = menu_input_pointer_state(MENU_POINTER_X_AXIS);
-      int16_t pointer_y = menu_input_pointer_state(MENU_POINTER_Y_AXIS);
+      static float accel0       = 0.0f;
+      static float accel1       = 0.0f;
+      int16_t pointer_x         = menu_input_pointer_state(MENU_POINTER_X_AXIS);
+      int16_t pointer_y         = menu_input_pointer_state(MENU_POINTER_Y_AXIS);
 
       metrics.type  = DISPLAY_METRIC_DPI;
       metrics.value = &dpi; 
@@ -1111,19 +1109,20 @@ static int menu_input_pointer_post_iterate(
       if (!pointer_oldpressed[0])
       {
          menu_input->pointer.accel         = 0;
-         menu_input->pointer.accel0        = 0;
-         menu_input->pointer.accel1        = 0;
-         menu_input->pointer.start_x       = pointer_x;
-         menu_input->pointer.start_y       = pointer_y;
+         accel0                            = 0;
+         accel1                            = 0;
+         start_x                           = pointer_x;
+         start_y                           = pointer_y;
          pointer_old_x                     = pointer_x;
          pointer_old_y                     = pointer_y;
          pointer_oldpressed[0]             = true;
       }
-      else if (abs(pointer_x - menu_input->pointer.start_x) > (dpi / 10)
-            || abs(pointer_y - menu_input->pointer.start_y) > (dpi / 10))
+      else if (abs(pointer_x - start_x) > (dpi / 10)
+            || abs(pointer_y - start_y) > (dpi / 10))
       {
          float s, delta_time;
-         menu_input->pointer.dragging      = true;
+
+         menu_input_ctl(MENU_INPUT_CTL_SET_POINTER_DRAGGED, NULL);
          menu_input->pointer.dx            = pointer_x - pointer_old_x;
          menu_input->pointer.dy            = pointer_y - pointer_old_y;
          pointer_old_x                     = pointer_x;
@@ -1131,23 +1130,23 @@ static int menu_input_pointer_post_iterate(
 
          menu_animation_ctl(MENU_ANIMATION_CTL_DELTA_TIME, &delta_time);
 
-         s =  (menu_input->pointer.dy * 550000000.0 ) /( dpi * delta_time );
-         menu_input->pointer.accel = (menu_input->pointer.accel0 
-               + menu_input->pointer.accel1 + s) / 3;
-         menu_input->pointer.accel0 = menu_input->pointer.accel1;
-         menu_input->pointer.accel1 = menu_input->pointer.accel;
+         s                         =  (menu_input->pointer.dy * 550000000.0 ) /
+            ( dpi * delta_time );
+         menu_input->pointer.accel = (accel0 + accel1 + s) / 3;
+         accel0                    = accel1;
+         accel1                    = menu_input->pointer.accel;
       }
    }
    else
    {
       if (pointer_oldpressed[0])
       {
-         if (!menu_input->pointer.dragging)
+         if (!menu_input_ctl(MENU_INPUT_CTL_IS_POINTER_DRAGGED, NULL))
          {
             menu_ctx_pointer_t point;
 
-            point.x      = menu_input->pointer.start_x;
-            point.y      = menu_input->pointer.start_y;
+            point.x      = start_x;
+            point.y      = start_y;
             point.ptr    = menu_input->pointer.ptr;
             point.cbs    = cbs;
             point.entry  = entry;
@@ -1159,13 +1158,14 @@ static int menu_input_pointer_post_iterate(
          }
 
          pointer_oldpressed[0]             = false;
-         menu_input->pointer.start_x       = 0;
-         menu_input->pointer.start_y       = 0;
+         start_x                           = 0;
+         start_y                           = 0;
          pointer_old_x                     = 0;
          pointer_old_y                     = 0;
          menu_input->pointer.dx            = 0;
          menu_input->pointer.dy            = 0;
-         menu_input->pointer.dragging      = false;
+
+         menu_input_ctl(MENU_INPUT_CTL_UNSET_POINTER_DRAGGED, NULL);
       }
    }
 

@@ -13,6 +13,9 @@
  *  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <retro_miscellaneous.h>
+
+#include "../../frontend/frontend_driver.h"
 #include "../../general.h"
 #include "../../verbosity.h"
 #include "win32_common.h"
@@ -386,32 +389,46 @@ bool win32_suppress_screensaver(void *data, bool enable)
 #ifdef _XBOX
    return false;
 #else
-   typedef HANDLE (WINAPI * PowerCreateRequestPtr)(REASON_CONTEXT *context);
-   typedef BOOL   (WINAPI * PowerSetRequestPtr)(HANDLE PowerRequest, POWER_REQUEST_TYPE RequestType);
-   HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
-   PowerCreateRequestPtr powerCreateRequest =
-     (PowerCreateRequestPtr)GetProcAddress(kernel32, "PowerCreateRequest");
-   PowerSetRequestPtr    powerSetRequest =
-     (PowerSetRequestPtr)GetProcAddress(kernel32, "PowerSetRequest");
 
    if(enable)
    {
-      if(powerCreateRequest && powerSetRequest)
+      int major, minor;
+      char tmp[PATH_MAX_LENGTH];
+      const frontend_ctx_driver_t *frontend = frontend_get_ptr();
+
+      if (!frontend)
+         return false;
+
+      frontend->get_os(tmp, sizeof(tmp), &major, &minor);
+
+      if (major >= 6 && minor >= 1)
       {
          /* Windows 7, 8, 10 codepath */
-         POWER_REQUEST_CONTEXT RequestContext;
-        HANDLE Request;
+         typedef HANDLE (WINAPI * PowerCreateRequestPtr)(REASON_CONTEXT *context);
+         typedef BOOL   (WINAPI * PowerSetRequestPtr)(HANDLE PowerRequest,
+               POWER_REQUEST_TYPE RequestType);
+         HMODULE kernel32 = GetModuleHandleW(L"kernel32.dll");
+         PowerCreateRequestPtr powerCreateRequest =
+            (PowerCreateRequestPtr)GetProcAddress(kernel32, "PowerCreateRequest");
+         PowerSetRequestPtr    powerSetRequest =
+            (PowerSetRequestPtr)GetProcAddress(kernel32, "PowerSetRequest");
 
-         RequestContext.Version = POWER_REQUEST_CONTEXT_VERSION;
-         RequestContext.Flags = POWER_REQUEST_CONTEXT_SIMPLE_STRING;
-         RequestContext.Reason.SimpleReasonString = (LPWSTR)L"RetroArch running";
+         if(powerCreateRequest && powerSetRequest)
+         {
+            POWER_REQUEST_CONTEXT RequestContext;
+            HANDLE Request;
 
-         Request = powerCreateRequest(&RequestContext);
+            RequestContext.Version = POWER_REQUEST_CONTEXT_VERSION;
+            RequestContext.Flags = POWER_REQUEST_CONTEXT_SIMPLE_STRING;
+            RequestContext.Reason.SimpleReasonString = (LPWSTR)L"RetroArch running";
 
-         powerSetRequest( Request, PowerRequestDisplayRequired);
-         return true;
+            Request = powerCreateRequest(&RequestContext);
+
+            powerSetRequest( Request, PowerRequestDisplayRequired);
+            return true;
+         }
       }
-     else
+      else
       {
          /* XP / Vista codepath */
          SetThreadExecutionState(ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED);

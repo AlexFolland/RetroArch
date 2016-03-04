@@ -32,31 +32,30 @@ extern "C" {
 
 typedef struct rarch_system_info
 {
-   char title_buf[64];
-
    struct retro_system_info info;
 
    unsigned rotation;
    unsigned performance_level;
 
-   bool force_nonblock;
-
    const char *input_desc_btn[MAX_USERS][RARCH_FIRST_META_KEY];
    char valid_extensions[PATH_MAX_LENGTH];
 
-   struct retro_disk_control_callback disk_control; 
-   struct retro_camera_callback camera_callback;
-   struct retro_location_callback location_callback;
-
-   struct retro_frame_time_callback frame_time;
+   struct retro_disk_control_callback  disk_control_cb; 
+   struct retro_location_callback      location_cb;
 
    core_option_manager_t *core_options;
 
-   struct retro_subsystem_info *special;
-   unsigned num_special;
+   struct
+   {
+      struct retro_subsystem_info *data;
+      unsigned size;
+   } subsystem;
 
-   struct retro_controller_info *ports;
-   unsigned num_ports;
+   struct
+   {
+      struct retro_controller_info *data;
+      unsigned size;
+   } ports;
 } rarch_system_info_t;
 
 #ifdef __cplusplus

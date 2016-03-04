@@ -83,7 +83,7 @@ static void event_disk_control_set_eject(bool new_state, bool print_log)
    runloop_ctl(RUNLOOP_CTL_SYSTEM_INFO_GET, &info);
 
    if (info)
-      control = (const struct retro_disk_control_callback*)&info->disk_control;
+      control = (const struct retro_disk_control_callback*)&info->disk_control_cb;
 
    if (!control || !control->get_num_images)
       return;
@@ -131,7 +131,7 @@ static void event_disk_control_set_index(unsigned idx)
    runloop_ctl(RUNLOOP_CTL_SYSTEM_INFO_GET, &info);
 
    if (info)
-      control = (const struct retro_disk_control_callback*)&info->disk_control;
+      control = (const struct retro_disk_control_callback*)&info->disk_control_cb;
 
    if (!control || !control->get_num_images)
       return;
@@ -189,7 +189,7 @@ static bool event_disk_control_append_image(const char *path)
 
    if (sysinfo)
       control = (const struct retro_disk_control_callback*)
-         &sysinfo->disk_control;
+         &sysinfo->disk_control_cb;
 
    if (!control)
       return false;
@@ -340,9 +340,9 @@ static void event_init_controllers(void)
       const struct retro_controller_description *desc = NULL;
       unsigned device = settings->input.libretro_device[i];
 
-      if (i < info->num_ports)
+      if (i < info->ports.size)
          desc = libretro_find_controller_description(
-               &info->ports[i], device);
+               &info->ports.data[i], device);
 
       if (desc)
          ident = desc->desc;
@@ -1096,10 +1096,10 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
          break;
       case EVENT_CMD_REINIT:
          {
-            const struct retro_hw_render_callback *hw_render =
-               (const struct retro_hw_render_callback*)video_driver_callback();
+            struct retro_hw_render_callback *hwr = NULL;
+            video_driver_ctl(RARCH_DISPLAY_CTL_HW_CONTEXT_GET, &hwr);
 
-            if (hw_render->cache_context)
+            if (hwr->cache_context)
                video_driver_ctl(
                      RARCH_DISPLAY_CTL_SET_VIDEO_CACHE_CONTEXT, NULL);
             else
@@ -1270,11 +1270,12 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
          break;
       case EVENT_CMD_CORE_DEINIT:
          {
-            struct retro_hw_render_callback *cb = video_driver_callback();
+            struct retro_hw_render_callback *hwr = NULL;
+            video_driver_ctl(RARCH_DISPLAY_CTL_HW_CONTEXT_GET, &hwr);
             event_deinit_core(true);
 
-            if (cb)
-               memset(cb, 0, sizeof(*cb));
+            if (hwr)
+               memset(hwr, 0, sizeof(*hwr));
 
             break;
          }
@@ -1319,14 +1320,17 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
          {
             /* RARCH_DRIVER_CTL_UNINIT clears the callback struct so we
              * need to make sure to keep a copy */
-            struct retro_hw_render_callback hw_render;
+            struct retro_hw_render_callback *hwr = NULL;
+            struct retro_hw_render_callback hwr_copy;
             int flags = DRIVERS_CMD_ALL;
 
-            memcpy(&hw_render, video_driver_callback(), sizeof(hw_render));
+            video_driver_ctl(RARCH_DISPLAY_CTL_HW_CONTEXT_GET, &hwr);
+
+            memcpy(&hwr_copy, hwr, sizeof(hwr_copy));
 
             driver_ctl(RARCH_DRIVER_CTL_UNINIT, &flags);
 
-            memcpy(video_driver_callback(), &hw_render, sizeof(hw_render));
+            memcpy(hwr, &hwr_copy, sizeof(*hwr));
 
             driver_ctl(RARCH_DRIVER_CTL_INIT, &flags);
          }
@@ -1559,11 +1563,11 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
             return event_disk_control_append_image(path);
          }
       case EVENT_CMD_DISK_EJECT_TOGGLE:
-         if (info && info->disk_control.get_num_images)
+         if (info && info->disk_control_cb.get_num_images)
          {
             const struct retro_disk_control_callback *control =
                (const struct retro_disk_control_callback*)
-               &info->disk_control;
+               &info->disk_control_cb;
 
             if (control)
             {
@@ -1577,11 +1581,11 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
                   1, 120, true);
          break;
       case EVENT_CMD_DISK_NEXT:
-         if (info && info->disk_control.get_num_images)
+         if (info && info->disk_control_cb.get_num_images)
          {
             const struct retro_disk_control_callback *control =
                (const struct retro_disk_control_callback*)
-               &info->disk_control;
+               &info->disk_control_cb;
 
             if (!control)
                return false;
@@ -1597,11 +1601,11 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
                   1, 120, true);
          break;
       case EVENT_CMD_DISK_PREV:
-         if (info && info->disk_control.get_num_images)
+         if (info && info->disk_control_cb.get_num_images)
          {
             const struct retro_disk_control_callback *control =
                (const struct retro_disk_control_callback*)
-               &info->disk_control;
+               &info->disk_control_cb;
 
             if (!control)
                return false;
