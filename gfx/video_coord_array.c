@@ -19,7 +19,7 @@
 #include <retro_inline.h>
 #include <retro_miscellaneous.h>
 
-#include "video_common.h"
+#include "video_coord_array.h"
 
 static INLINE bool realloc_checked(void **ptr, size_t size)
 {
@@ -36,38 +36,40 @@ static INLINE bool realloc_checked(void **ptr, size_t size)
    return *ptr == nptr;
 }
 
-bool gfx_coord_array_add(gfx_coord_array_t *ca,
-      const gfx_coords_t *coords, unsigned count)
+static bool gfx_coord_array_resize(gfx_coord_array_t *ca,
+   unsigned count)
 {
-   size_t base_size, offset;
-   bool success   = false;
-
-   count          = MIN(count, coords->vertices);
-
    if (ca->coords.vertices + count >= ca->allocated)
    {
       unsigned alloc_size = next_pow2(ca->coords.vertices + count);
       size_t base_size    = sizeof(float) * alloc_size;
 
-      bool vert_ok        = realloc_checked((void**)&ca->coords.vertex,
-            2 * base_size);
-      bool color_ok       = realloc_checked((void**)&ca->coords.color,
-            4 * base_size);
-      bool tex_ok         = realloc_checked((void**)&ca->coords.tex_coord,
-            2 * base_size);
-      bool lut_ok         = realloc_checked((void**)&ca->coords.lut_tex_coord,
-            2 * base_size);
+      if (!realloc_checked((void**)&ca->coords.vertex,
+            2 * base_size))
+         return false;
+      if (!realloc_checked((void**)&ca->coords.color,
+            4 * base_size))
+         return false;
+      if (!realloc_checked((void**)&ca->coords.tex_coord,
+            2 * base_size))
+         return false;
+      if (!realloc_checked((void**)&ca->coords.lut_tex_coord,
+            2 * base_size))
+         return false;
 
-      if (vert_ok && color_ok && tex_ok && lut_ok)
-      {
-         ca->allocated = alloc_size;
-         success       = true;
-      }
+      ca->allocated = alloc_size;
    }
-   else
-      success = true;
 
-   if (!success) /* Allocation failed. */
+   return true;
+}
+
+bool gfx_coord_array_add(gfx_coord_array_t *ca,
+      const gfx_coords_t *coords, unsigned count)
+{
+   size_t base_size, offset;
+   count          = MIN(count, coords->vertices);
+
+   if (!gfx_coord_array_resize(ca, count))
       return false;
 
    base_size = count * sizeof(float);
@@ -99,18 +101,20 @@ void gfx_coord_array_free(gfx_coord_array_t *ca)
 
    if (ca->coords.vertex)
       free(ca->coords.vertex);
+   ca->coords.vertex        = NULL;
+
    if (ca->coords.color)
       free(ca->coords.color);
+   ca->coords.color         = NULL;
+
    if (ca->coords.tex_coord)
       free(ca->coords.tex_coord);
+   ca->coords.tex_coord     = NULL;
+
    if (ca->coords.lut_tex_coord)
       free(ca->coords.lut_tex_coord);
-
-   ca->coords.vertex        = NULL;
-   ca->coords.color         = NULL;
-   ca->coords.tex_coord     = NULL;
    ca->coords.lut_tex_coord = NULL;
 
-   ca->coords.vertices = 0;
-   ca->allocated       = 0;
+   ca->coords.vertices      = 0;
+   ca->allocated            = 0;
 }

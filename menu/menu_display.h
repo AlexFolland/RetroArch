@@ -24,7 +24,7 @@
 
 #include "../gfx/video_context_driver.h"
 #include "../gfx/font_driver.h"
-#include "../gfx/video_common.h"
+#include "../gfx/video_coord_array.h"
 #include "../libretro_version_1.h"
 
 #ifdef __cplusplus
@@ -168,6 +168,8 @@ typedef struct menu_display_ctx_font
    const char *path;
    float size;
 } menu_display_ctx_font_t;
+
+typedef uintptr_t menu_texture_item;
 
 bool menu_display_ctl(enum menu_display_ctl_state state, void *data);
 
