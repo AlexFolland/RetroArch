@@ -465,6 +465,11 @@ static void event_load_auto_state(void)
       return;
 #endif
 
+#ifdef HAVE_CHEEVOS
+   if (settings->cheevos.hardcore_mode_enable)
+      return;
+#endif
+
    if (!settings->savestate_auto_load)
       return;
 
@@ -628,6 +633,11 @@ static bool event_save_auto_state(void)
    if (content_ctl(CONTENT_CTL_DOES_NOT_NEED_CONTENT, NULL))
       return false;
 
+#ifdef HAVE_CHEEVOS
+   if (settings->cheevos.hardcore_mode_enable)
+      return false;
+#endif
+
    fill_pathname_noext(savestate_name_auto, global->name.savestate,
          ".auto", sizeof(savestate_name_auto));
 
@@ -755,7 +765,7 @@ void event_save_current_config(void)
    global_t   *global   = global_get_ptr();
    bool ret             = false;
 
-   if (settings->config_save_on_exit && *global->path.config)
+   if (settings->config_save_on_exit && !string_is_empty(global->path.config))
    {
       /* Save last core-specific config to the default config location,
        * needed on consoles for core switching and reusing last good
@@ -768,22 +778,21 @@ void event_save_current_config(void)
          ret = config_save_file(global->path.core_specific_config);
       else
          ret = config_save_file(global->path.config);
-   }
+      if (ret)
+      {
+         snprintf(msg, sizeof(msg), "Saved new config to \"%s\".",
+               global->path.config);
+         RARCH_LOG("%s\n", msg);
+      }
+      else
+      {
+         snprintf(msg, sizeof(msg), "Failed saving config to \"%s\".",
+               global->path.config);
+         RARCH_ERR("%s\n", msg);
+      }
 
-   if (ret)
-   {
-      snprintf(msg, sizeof(msg), "Saved new config to \"%s\".",
-            global->path.config);
-      RARCH_LOG("%s\n", msg);
+      runloop_msg_queue_push(msg, 1, 180, true);
    }
-   else
-   {
-      snprintf(msg, sizeof(msg), "Failed saving config to \"%s\".",
-            global->path.config);
-      RARCH_ERR("%s\n", msg);
-   }
-
-   runloop_msg_queue_push(msg, 1, 180, true);
 }
 
 /**
@@ -1029,6 +1038,12 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
          if (netplay_driver_ctl(RARCH_NETPLAY_CTL_IS_DATA_INITED, NULL))
             return false;
 #endif
+
+#ifdef HAVE_CHEEVOS
+         if (settings->cheevos.hardcore_mode_enable)
+            return false;
+#endif
+
          event_main_state(cmd);
          break;
       case EVENT_CMD_RESIZE_WINDOWED_SCALE:
@@ -1070,6 +1085,11 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
          core_ctl(CORE_CTL_RETRO_RESET, NULL);
          break;
       case EVENT_CMD_SAVE_STATE:
+#ifdef HAVE_CHEEVOS
+         if (settings->cheevos.hardcore_mode_enable)
+            return false;
+#endif
+
          if (settings->savestate_auto_index)
             settings->state_slot++;
 
@@ -1093,6 +1113,11 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
          break;
       case EVENT_CMD_QUIT:
          rarch_ctl(RARCH_CTL_QUIT, NULL);
+         break;
+      case EVENT_CMD_CHEEVOS_HARDCORE_MODE_TOGGLE:
+#ifdef HAVE_CHEEVOS
+         cheevos_ctl(CHEEVOS_CTL_TOGGLE_HARDCORE_MODE, NULL);
+#endif
          break;
       case EVENT_CMD_REINIT:
          {
@@ -1139,9 +1164,18 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
          if (netplay_driver_ctl(RARCH_NETPLAY_CTL_IS_DATA_INITED, NULL))
             return false;
 #endif
+#ifdef HAVE_CHEEVOS
+         if (settings->cheevos.hardcore_mode_enable)
+            return false;
+#endif
+
          state_manager_event_deinit();
          break;
       case EVENT_CMD_REWIND_INIT:
+#ifdef HAVE_CHEEVOS
+         if (settings->cheevos.hardcore_mode_enable)
+            return false;
+#endif
 #ifdef HAVE_NETPLAY
          if (!netplay_driver_ctl(RARCH_NETPLAY_CTL_IS_DATA_INITED, NULL))
 #endif
@@ -1629,21 +1663,27 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
          break;
       case EVENT_CMD_GRAB_MOUSE_TOGGLE:
          {
+            bool ret = false;
             static bool grab_mouse_state  = false;
-            bool grab_mouse_state_tmp;
 
             grab_mouse_state = !grab_mouse_state;
 
-            if (!input_driver_ctl(RARCH_INPUT_CTL_GRAB_MOUSE, &grab_mouse_state))
+            if (grab_mouse_state)
+               ret = input_driver_ctl(RARCH_INPUT_CTL_GRAB_MOUSE, NULL);
+            else
+               ret = input_driver_ctl(RARCH_INPUT_CTL_UNGRAB_MOUSE, NULL);
+
+            if (!ret)
                return false;
 
             RARCH_LOG("%s: %s.\n",
                   msg_hash_to_str(MSG_GRAB_MOUSE_STATE),
                   grab_mouse_state ? "yes" : "no");
 
-            grab_mouse_state_tmp = !grab_mouse_state;
-            video_driver_ctl(RARCH_DISPLAY_CTL_SHOW_MOUSE,
-                  &grab_mouse_state_tmp);
+            if (grab_mouse_state)
+               video_driver_ctl(RARCH_DISPLAY_CTL_HIDE_MOUSE, NULL);
+            else
+               video_driver_ctl(RARCH_DISPLAY_CTL_SHOW_MOUSE, NULL);
          }
          break;
       case EVENT_CMD_PERFCNT_REPORT_FRONTEND_LOG:

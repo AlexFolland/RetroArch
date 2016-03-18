@@ -480,8 +480,9 @@ FIFO BUFFER
 AUDIO RESAMPLER
 ============================================================ */
 #include "../audio/audio_resampler_driver.c"
-#include "../audio/drivers_resampler/sinc.c"
-#include "../audio/drivers_resampler/nearest.c"
+#include "../audio/drivers_resampler/sinc_resampler.c"
+#include "../audio/drivers_resampler/nearest_resampler.c"
+#include "../audio/drivers_resampler/null_resampler.c"
 #include "../audio/drivers_resampler/cc_resampler.c"
 
 /*============================================================
@@ -885,6 +886,8 @@ MENU
 
 #ifdef HAVE_ZAHNRAD
 #include "../deps/zahnrad/zahnrad.c"
+#include "../menu/drivers/zr_common.c"
+#include "../menu/drivers/zr_menu.c"
 #include "../menu/drivers/zr.c"
 #endif
 

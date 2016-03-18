@@ -14,10 +14,10 @@
  */
 
 #include "../input_keymaps.h"
+#include "../input_keyboard.h"
 #include "../../driver.h"
 
 #include "keyboard_event_udev.h"
-
 
 #define UDEV_MAX_KEYS (KEY_MAX + 7) / 8
 
@@ -26,12 +26,14 @@ static uint8_t udev_key_state[UDEV_MAX_KEYS];
 #ifdef HAVE_XKBCOMMON
 void free_xkb(void);
 
-void handle_xkb(int code, int value);
+int handle_xkb(int code, int value);
 #endif
 
 void udev_handle_keyboard(void *data,
       const struct input_event *event, udev_input_device_t *dev)
 {
+   bool key_handled = false;
+
    switch (event->type)
    {
       case EV_KEY:
@@ -41,8 +43,13 @@ void udev_handle_keyboard(void *data,
             BIT_CLEAR(udev_key_state, event->code);
 
 #ifdef HAVE_XKBCOMMON
-         handle_xkb(event->code, event->value);
+         if (handle_xkb(event->code, event->value) == 0)
+            return;
 #endif
+
+         input_keyboard_event(event->value,
+               input_keymaps_translate_keysym_to_rk(event->code),
+               0, 0, RETRO_DEVICE_KEYBOARD);
          break;
 
       default:

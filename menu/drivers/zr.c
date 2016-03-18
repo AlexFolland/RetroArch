@@ -30,10 +30,9 @@
 #include <gfx/math/matrix_4x4.h>
 #include <string/stdstring.h>
 #include <string/string_list.h>
-#include "../../gfx/video_context_driver.h"
-#include "../../gfx/video_shader_driver.h"
 
 #include "menu_generic.h"
+#include "zr_menu.h"
 
 #include "../menu_driver.h"
 #include "../menu_animation.h"
@@ -49,834 +48,30 @@
 #include "../../verbosity.h"
 #include "../../tasks/tasks_internal.h"
 
-#include "playlist.h"
-
-#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
-#include "../../gfx/common/gl_common.h"
-#endif
-
-#include "../../deps/zahnrad/zahnrad.h"
-
-#define MAX_VERTEX_MEMORY     (512 * 1024)
-#define MAX_ELEMENT_MEMORY    (128 * 1024)
-
-#define ZR_SYSTEM_TAB_END     ZR_SYSTEM_TAB_SETTINGS
-
-enum
+static void zrmenu_main(zrmenu_handle_t *zr)
 {
-   ZR_TEXTURE_POINTER = 0,
-   ZR_TEXTURE_BACK,
-   ZR_TEXTURE_SWITCH_ON,
-   ZR_TEXTURE_SWITCH_OFF,
-   ZR_TEXTURE_TAB_MAIN_ACTIVE,
-   ZR_TEXTURE_TAB_PLAYLISTS_ACTIVE,
-   ZR_TEXTURE_TAB_SETTINGS_ACTIVE,
-   ZR_TEXTURE_TAB_MAIN_PASSIVE,
-   ZR_TEXTURE_TAB_PLAYLISTS_PASSIVE,
-   ZR_TEXTURE_TAB_SETTINGS_PASSIVE,
-   ZR_TEXTURE_LAST
-};
-
-enum
-{
-   ZRMENU_WND_MAIN = 0,
-   ZRMENU_WND_CONTROL,
-   ZRMENU_WND_SHADER_PARAMETERS,
-   ZRMENU_WND_TEST
-};
-
-enum zrmenu_theme
-{
-   THEME_DARK = 0,
-   THEME_LIGHT
-};
-
-struct zrmenu
-{
-   void *memory;
-   struct zr_context ctx;
-   struct zr_memory_status status;
-
-   enum zrmenu_theme theme;
-};
-
-static struct zrmenu gui;
-
-typedef struct zrmenu_handle
-{
-   char box_message[PATH_MAX_LENGTH];
-   bool window_enabled[4];
-   bool resize;
-   unsigned width;
-   unsigned height;
-
-   struct
-   {
-      struct
-      {
-         float alpha;
-      } arrow;
-
-      menu_texture_item bg;
-      menu_texture_item list[ZR_TEXTURE_LAST];
-   } textures;
-
-   gfx_font_raster_block_t list_block;
-} zrmenu_handle_t;
-
-struct zr_device
-{
-   struct zr_buffer cmds;
-   struct zr_draw_null_texture null;
-#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
-   GLuint vbo, vao, ebo;
-
-   GLuint prog;
-   GLuint vert_shdr;
-   GLuint frag_shdr;
-
-   GLint attrib_pos;
-   GLint attrib_uv;
-   GLint attrib_col;
-
-   GLint uniform_proj;
-   GLuint font_tex;
-#endif
-};
-
-static struct zr_device device;
-static struct zr_font font;
-static char zr_font_path[PATH_MAX_LENGTH];
-
-static struct zr_user_font usrfnt;
-static struct zr_allocator zr_alloc;
-
-
-bool zr_checkbox_bool(struct zr_context* cx, const char* text, bool *active)
-{
-   int    x = *active;
-   bool ret = zr_checkbox(cx, text, &x);
-   *active  = x;
-
-   return ret;
-}
-
-float zr_checkbox_float(struct zr_context* cx, const char* text, float *active)
-{
-   int x     = *active;
-   float ret = zr_checkbox(cx, text, &x);
-   *active   = x;
-
-   return ret;
-}
-
-static void zr_labelf(struct zr_context *ctx,
-      enum zr_text_align align, const char *fmt, ...)
-{
-    char buffer[1024];
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
-    buffer[1023] = 0;
-    zr_label(ctx, buffer, align);
-    va_end(args);
-}
-
-static void zrmenu_set_style(struct zr_context *ctx, enum zrmenu_theme theme)
-{
-   unsigned i;
-
-   for (i = 0; i < ZR_ROUNDING_MAX; ++i)
-      (&gui.ctx)->style.rounding[i] = 0;
-
-   switch (theme)
-   {
-      case THEME_LIGHT:
-         ctx->style.rounding[ZR_ROUNDING_SCROLLBAR] = 0;
-         ctx->style.properties[ZR_PROPERTY_SCROLLBAR_SIZE] = zr_vec2(10,10);
-         ctx->style.colors[ZR_COLOR_TEXT] = zr_rgba(20, 20, 20, 255);
-         ctx->style.colors[ZR_COLOR_TEXT_HOVERING] = zr_rgba(195, 195, 195, 255);
-         ctx->style.colors[ZR_COLOR_TEXT_ACTIVE] = zr_rgba(200, 200, 200, 255);
-         ctx->style.colors[ZR_COLOR_WINDOW] = zr_rgba(202, 212, 214, 215);
-         ctx->style.colors[ZR_COLOR_HEADER] = zr_rgba(137, 182, 224, 220);
-         ctx->style.colors[ZR_COLOR_BORDER] = zr_rgba(140, 159, 173, 0);
-         ctx->style.colors[ZR_COLOR_BUTTON] = zr_rgba(137, 182, 224, 255);
-         ctx->style.colors[ZR_COLOR_BUTTON_HOVER] = zr_rgba(142, 187, 229, 255);
-         ctx->style.colors[ZR_COLOR_BUTTON_ACTIVE] = zr_rgba(147, 192, 234, 255);
-         ctx->style.colors[ZR_COLOR_TOGGLE] = zr_rgba(177, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_TOGGLE_HOVER] = zr_rgba(245, 245, 245, 255);
-         ctx->style.colors[ZR_COLOR_TOGGLE_CURSOR] = zr_rgba(142, 187, 229, 255);
-         ctx->style.colors[ZR_COLOR_SELECTABLE] = zr_rgba(147, 192, 234, 255);
-         ctx->style.colors[ZR_COLOR_SELECTABLE_HOVER] = zr_rgba(150, 150, 150, 255);
-         ctx->style.colors[ZR_COLOR_SELECTABLE_TEXT] = zr_rgba(70, 70, 70, 255);
-         ctx->style.colors[ZR_COLOR_SLIDER] = zr_rgba(177, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_SLIDER_CURSOR] = zr_rgba(137, 182, 224, 245);
-         ctx->style.colors[ZR_COLOR_SLIDER_CURSOR_HOVER] = zr_rgba(142, 188, 229, 255);
-         ctx->style.colors[ZR_COLOR_SLIDER_CURSOR_ACTIVE] = zr_rgba(147, 193, 234, 255);
-         ctx->style.colors[ZR_COLOR_PROGRESS] = zr_rgba(177, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_PROGRESS_CURSOR] = zr_rgba(137, 182, 224, 255);
-         ctx->style.colors[ZR_COLOR_PROGRESS_CURSOR_HOVER] = zr_rgba(142, 188, 229, 255);
-         ctx->style.colors[ZR_COLOR_PROGRESS_CURSOR_ACTIVE] = zr_rgba(147, 193, 234, 255);
-         ctx->style.colors[ZR_COLOR_PROPERTY] = zr_rgba(210, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_PROPERTY_HOVER] = zr_rgba(235, 235, 235, 255);
-         ctx->style.colors[ZR_COLOR_PROPERTY_ACTIVE] = zr_rgba(230, 230, 230, 255);
-         ctx->style.colors[ZR_COLOR_INPUT] = zr_rgba(210, 210, 210, 225);
-         ctx->style.colors[ZR_COLOR_INPUT_CURSOR] = zr_rgba(20, 20, 20, 255);
-         ctx->style.colors[ZR_COLOR_INPUT_TEXT] = zr_rgba(20, 20, 20, 255);
-         ctx->style.colors[ZR_COLOR_COMBO] = zr_rgba(210, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_HISTO] = zr_rgba(210, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_HISTO_BARS] = zr_rgba(137, 182, 224, 255);
-         ctx->style.colors[ZR_COLOR_HISTO_HIGHLIGHT] = zr_rgba( 255, 0, 0, 255);
-         ctx->style.colors[ZR_COLOR_PLOT] = zr_rgba(210, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_PLOT_LINES] = zr_rgba(137, 182, 224, 255);
-         ctx->style.colors[ZR_COLOR_PLOT_HIGHLIGHT] = zr_rgba(255, 0, 0, 255);
-         ctx->style.colors[ZR_COLOR_SCROLLBAR] = zr_rgba(190, 200, 200, 255);
-         ctx->style.colors[ZR_COLOR_SCROLLBAR_CURSOR] = zr_rgba(64, 84, 95, 255);
-         ctx->style.colors[ZR_COLOR_SCROLLBAR_CURSOR_HOVER] = zr_rgba(70, 90, 100, 255);
-         ctx->style.colors[ZR_COLOR_SCROLLBAR_CURSOR_ACTIVE] = zr_rgba(75, 95, 105, 255);
-         ctx->style.colors[ZR_COLOR_TABLE_LINES] = zr_rgba(100, 100, 100, 255);
-         ctx->style.colors[ZR_COLOR_TAB_HEADER] = zr_rgba(156, 193, 220, 255);
-         ctx->style.colors[ZR_COLOR_SCALER] = zr_rgba(100, 100, 100, 255);
-         break;
-      case THEME_DARK:
-         ctx->style.rounding[ZR_ROUNDING_SCROLLBAR] = 0;
-         ctx->style.properties[ZR_PROPERTY_SCROLLBAR_SIZE] = zr_vec2(10,10);
-         ctx->style.colors[ZR_COLOR_TEXT] = zr_rgba(210, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_TEXT_HOVERING] = zr_rgba(195, 195, 195, 255);
-         ctx->style.colors[ZR_COLOR_TEXT_ACTIVE] = zr_rgba(200, 200, 200, 255);
-         ctx->style.colors[ZR_COLOR_WINDOW] = zr_rgba(45, 53, 56, 215);
-         ctx->style.colors[ZR_COLOR_HEADER] = zr_rgba(46, 46, 46, 255);
-         ctx->style.colors[ZR_COLOR_BORDER] = zr_rgba(46, 46, 46, 0);
-         ctx->style.colors[ZR_COLOR_BUTTON] = zr_rgba(48, 83, 111, 255);
-         ctx->style.colors[ZR_COLOR_BUTTON_HOVER] = zr_rgba(53, 88, 116, 255);
-         ctx->style.colors[ZR_COLOR_BUTTON_ACTIVE] = zr_rgba(58, 93, 121, 255);
-         ctx->style.colors[ZR_COLOR_TOGGLE] = zr_rgba(50, 58, 61, 255);
-         ctx->style.colors[ZR_COLOR_TOGGLE_HOVER] = zr_rgba(55, 63, 66, 255);
-         ctx->style.colors[ZR_COLOR_TOGGLE_CURSOR] = zr_rgba(48, 83, 111, 255);
-         ctx->style.colors[ZR_COLOR_SELECTABLE] = zr_rgba(48, 83, 111, 255);
-         ctx->style.colors[ZR_COLOR_SELECTABLE_HOVER] = zr_rgba(48, 83, 111, 255);
-         ctx->style.colors[ZR_COLOR_SELECTABLE_TEXT] = zr_rgba(210, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_SLIDER] = zr_rgba(50, 58, 61, 255);
-         ctx->style.colors[ZR_COLOR_SLIDER_CURSOR] = zr_rgba(48, 83, 111, 245);
-         ctx->style.colors[ZR_COLOR_SLIDER_CURSOR_HOVER] = zr_rgba(53, 88, 116, 255);
-         ctx->style.colors[ZR_COLOR_SLIDER_CURSOR_ACTIVE] = zr_rgba(58, 93, 121, 255);
-         ctx->style.colors[ZR_COLOR_PROGRESS] = zr_rgba(50, 58, 61, 255);
-         ctx->style.colors[ZR_COLOR_PROGRESS_CURSOR] = zr_rgba(48, 83, 111, 255);
-         ctx->style.colors[ZR_COLOR_PROGRESS_CURSOR_HOVER] = zr_rgba(53, 88, 116, 255);
-         ctx->style.colors[ZR_COLOR_PROGRESS_CURSOR_ACTIVE] = zr_rgba(58, 93, 121, 255);
-         ctx->style.colors[ZR_COLOR_PROPERTY] = zr_rgba(50, 58, 61, 255);
-         ctx->style.colors[ZR_COLOR_PROPERTY_HOVER] = zr_rgba(55, 63, 66, 255);
-         ctx->style.colors[ZR_COLOR_PROPERTY_ACTIVE] = zr_rgba(60, 68, 71, 255);
-         ctx->style.colors[ZR_COLOR_INPUT] = zr_rgba(50, 58, 61, 225);
-         ctx->style.colors[ZR_COLOR_INPUT_CURSOR] = zr_rgba(210, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_INPUT_TEXT] = zr_rgba(210, 210, 210, 255);
-         ctx->style.colors[ZR_COLOR_COMBO] = zr_rgba(50, 58, 61, 255);
-         ctx->style.colors[ZR_COLOR_HISTO] = zr_rgba(50, 58, 61, 255);
-         ctx->style.colors[ZR_COLOR_HISTO_BARS] = zr_rgba(48, 83, 111, 255);
-         ctx->style.colors[ZR_COLOR_HISTO_HIGHLIGHT] = zr_rgba(255, 0, 0, 255);
-         ctx->style.colors[ZR_COLOR_PLOT] = zr_rgba(50, 58, 61, 255);
-         ctx->style.colors[ZR_COLOR_PLOT_LINES] = zr_rgba(48, 83, 111, 255);
-         ctx->style.colors[ZR_COLOR_PLOT_HIGHLIGHT] = zr_rgba(255, 0, 0, 255);
-         ctx->style.colors[ZR_COLOR_SCROLLBAR] = zr_rgba(50, 58, 61, 255);
-         ctx->style.colors[ZR_COLOR_SCROLLBAR_CURSOR] = zr_rgba(48, 83, 111, 255);
-         ctx->style.colors[ZR_COLOR_SCROLLBAR_CURSOR_HOVER] = zr_rgba(53, 88, 116, 255);
-         ctx->style.colors[ZR_COLOR_SCROLLBAR_CURSOR_ACTIVE] = zr_rgba(58, 93, 121, 255);
-         ctx->style.colors[ZR_COLOR_TABLE_LINES] = zr_rgba(100, 100, 100, 255);
-         ctx->style.colors[ZR_COLOR_TAB_HEADER] = zr_rgba(48, 83, 111, 255);
-         ctx->style.colors[ZR_COLOR_SCALER] = zr_rgba(100, 100, 100, 255);
-         break;
-      default:
-         zr_load_default_style(ctx, ZR_DEFAULT_ALL);
-   }
-}
-
-static void zrmenu_wnd_shader_parameters(struct zr_context *ctx, struct zrmenu *gui,
-   zrmenu_handle_t *zr)
-{
-   unsigned i;
-   video_shader_ctx_t shader_info;
-   struct zr_panel layout;
-   settings_t *settings = config_get_ptr();
-
-   if (zr_begin(ctx, &layout, "Shader Parameters", zr_rect(240, 10, 300, 400),
-         ZR_WINDOW_CLOSABLE|ZR_WINDOW_MINIMIZABLE|ZR_WINDOW_MOVABLE|
-         ZR_WINDOW_SCALABLE|ZR_WINDOW_BORDER))
-   {
-      struct zr_panel combo;
-      static const char *themes[] = {"Dark", "Light"};
-      enum   zrmenu_theme old         = gui->theme;
-
-      zr_layout_row_dynamic(ctx, 30, 1);
-
-      video_shader_driver_ctl(SHADER_CTL_GET_CURRENT_SHADER, &shader_info);
-
-      if (shader_info.data)
-      {
-         for (i = 0; i < GFX_MAX_PARAMETERS; i++)
-         {
-            if (!string_is_empty(shader_info.data->parameters[i].desc))
-            {
-               if(shader_info.data->parameters[i].minimum == 0 &&
-                     shader_info.data->parameters[i].maximum == 1 &&
-                     shader_info.data->parameters[i].step == 1)
-                  zr_checkbox_float(ctx, shader_info.data->parameters[i].desc,
-                        &(shader_info.data->parameters[i].current));
-               else
-                  zr_property_float(ctx, shader_info.data->parameters[i].desc,
-                        shader_info.data->parameters[i].minimum,
-                        &(shader_info.data->parameters[i].current),
-                        shader_info.data->parameters[i].maximum,
-                        shader_info.data->parameters[i].step, 1);
-            }
-         }
-      }
-   }
-   zr_end(ctx);
-}
-
-bool zrmenu_wnd_control(struct zr_context *ctx, struct zrmenu *gui,
-   zrmenu_handle_t *zr)
-{
-   static int wnd_x = 900;
-   static int wnd_y = 60;
-   struct zr_panel layout;
-
-   bool ret = (zr_begin(ctx, &layout, "Control",
-      zr_rect(wnd_x, wnd_y, 350, 520),
-      ZR_WINDOW_CLOSABLE|ZR_WINDOW_MINIMIZABLE|ZR_WINDOW_MOVABLE|
-      ZR_WINDOW_SCALABLE|ZR_WINDOW_BORDER));
-
-   if (ret)
-   {
-      unsigned i;
-
-      /* Style */
-      if (zr_layout_push(ctx, ZR_LAYOUT_TAB, "Metrics", ZR_MINIMIZED))
-      {
-         zr_layout_row_dynamic(ctx, 20, 2);
-         zr_label(ctx,"Total:", ZR_TEXT_LEFT);
-         zr_labelf(ctx, ZR_TEXT_LEFT, "%lu", gui->status.size);
-         zr_label(ctx,"Used:", ZR_TEXT_LEFT);
-         zr_labelf(ctx, ZR_TEXT_LEFT, "%lu", gui->status.allocated);
-         zr_label(ctx,"Required:", ZR_TEXT_LEFT);
-         zr_labelf(ctx, ZR_TEXT_LEFT, "%lu", gui->status.needed);
-         zr_label(ctx,"Calls:", ZR_TEXT_LEFT);
-         zr_labelf(ctx, ZR_TEXT_LEFT, "%lu", gui->status.calls);
-         zr_layout_pop(ctx);
-      }
-      if (zr_layout_push(ctx, ZR_LAYOUT_TAB, "Properties", ZR_MINIMIZED))
-      {
-         zr_layout_row_dynamic(ctx, 22, 3);
-         for (i = 0; i <= ZR_PROPERTY_SCROLLBAR_SIZE; ++i)
-         {
-            zr_label(ctx, zr_get_property_name((enum zr_style_properties)i), ZR_TEXT_LEFT);
-            zr_property_float(ctx, "#X:", 0, &ctx->style.properties[i].x, 20, 1, 1);
-            zr_property_float(ctx, "#Y:", 0, &ctx->style.properties[i].y, 20, 1, 1);
-         }
-         zr_layout_pop(ctx);
-      }
-      if (zr_layout_push(ctx, ZR_LAYOUT_TAB, "Rounding", ZR_MINIMIZED))
-      {
-         zr_layout_row_dynamic(ctx, 22, 2);
-         for (i = 0; i < ZR_ROUNDING_MAX; ++i)
-         {
-            zr_label(ctx, zr_get_rounding_name((enum zr_style_rounding)i), ZR_TEXT_LEFT);
-            zr_property_float(ctx, "#R:", 0, &ctx->style.rounding[i], 20, 1, 1);
-         }
-         zr_layout_pop(ctx);
-      }
-   }
-   zr_end(ctx);
-
-
-   return ret;
-}
-
-static void zrmenu_wnd_test(struct zr_context *ctx, struct zrmenu *gui,
-   zrmenu_handle_t *zr)
-{
-   settings_t *settings = config_get_ptr();
-
-   struct zr_panel layout;
-   if (zr_begin(ctx, &layout, "Test", zr_rect(140, 90, 500, 600),
-         ZR_WINDOW_CLOSABLE|ZR_WINDOW_MINIMIZABLE|ZR_WINDOW_MOVABLE|
-         ZR_WINDOW_SCALABLE|ZR_WINDOW_BORDER))
-   {
-      unsigned size;
-      struct zr_panel combo;
-      menu_entry_t entry;
-      static const char *themes[] = {"Dark", "Light"};
-      enum   zrmenu_theme old         = gui->theme;
-
-      zr_layout_row_dynamic(ctx, 30, 2);
-
-      if (zr_button_text(ctx, "Quit", ZR_BUTTON_DEFAULT))
-      {
-            /* event handling */
-            printf("Pressed Event\n");
-            rarch_ctl(RARCH_CTL_FORCE_QUIT, NULL);
-      }
-
-      if (zr_button_text(ctx, "Quit", ZR_BUTTON_DEFAULT))
-      {
-            /* event handling */
-            printf("Pressed Event\n");
-            rarch_ctl(RARCH_CTL_FORCE_QUIT, NULL);
-      }
-      zr_layout_row_dynamic(ctx, 30, 4);
-      zr_checkbox_bool(ctx, "Show FPS", &(settings->fps_show));
-      zr_checkbox_bool(ctx, "Show FPS", &(settings->fps_show));
-      zr_checkbox_bool(ctx, "Show FPS", &(settings->fps_show));
-      zr_checkbox_bool(ctx, "Show FPS", &(settings->fps_show));
-      zr_layout_row_dynamic(ctx, 30, 2);
-      zr_label(ctx, "Volume:", ZR_TEXT_LEFT);
-      zr_slider_float(ctx, -80, &settings->audio.volume, 12, 0.5);
-      zr_layout_row_dynamic(ctx, 30, 1);
-      zr_property_int(ctx, "Max Users:", 1, (int*)&(settings->input.max_users),
-         MAX_USERS, 1, 1);
-
-      if (zr_combo_begin_text(ctx, &combo, themes[gui->theme], 200))
-      {
-         zr_layout_row_dynamic(ctx, 25, 1);
-         gui->theme = zr_combo_item(ctx, themes[THEME_DARK], ZR_TEXT_CENTERED)
-            ? THEME_DARK : gui->theme;
-         gui->theme = zr_combo_item(ctx, themes[THEME_LIGHT], ZR_TEXT_CENTERED)
-            ? THEME_LIGHT : gui->theme;
-         if (old != gui->theme) zrmenu_set_style(ctx, gui->theme);
-         zr_combo_end(ctx);
-      }
-
-      zr_label(ctx, "History:", ZR_TEXT_LEFT);
-
-      size = menu_entries_get_size();
-      if (zr_combo_begin_text(ctx, &combo, "", 180))
-      {
-         unsigned i;
-
-         for (i = 0; i < size; i++)
-         {
-            menu_entry_get(&entry, 0, i, NULL, true);
-            zr_layout_row_dynamic(ctx, 25, 1);
-            zr_combo_item(ctx, entry.path, ZR_TEXT_LEFT);
-         }
-         zr_combo_end(ctx);
-      }
-   }
-   zr_end(ctx);
-}
-
-static void zrmenu_wnd_main(struct zr_context *ctx, struct zrmenu *gui,
-   zrmenu_handle_t *zr)
-{
-   settings_t *settings = config_get_ptr();
-   struct zr_panel layout;
-
-   if (zr_begin(ctx, &layout, "Main", zr_rect(-1, -1, 120, zr->height + 1),
-         ZR_WINDOW_NO_SCROLLBAR))
-   {
-      struct zr_panel menu;
-      struct zr_panel node, context_menu;
-
-      /* context menu */
-      if (zr_contextual_begin(ctx, &context_menu, 0, zr_vec2(100, 220),
-         zr_window_get_bounds(ctx)))
-      {
-          zr_layout_row_dynamic(ctx, 25, 1);
-          if (zr_contextual_item(ctx, "Test 1", ZR_TEXT_CENTERED))
-             printf("test \n");
-          if (zr_contextual_item(ctx, "Test 2",ZR_TEXT_CENTERED))
-             printf("test \n");
-          zr_contextual_end(ctx);
-      }
-
-      /* main menu */
-      zr_menubar_begin(ctx);
-      zr_layout_row_begin(ctx, ZR_STATIC, 25, 1);
-      zr_layout_row_push(ctx, 100);
-
-      if (zr_menu_text_begin(ctx, &menu, "Menu", ZR_TEXT_LEFT|ZR_TEXT_MIDDLE, 120))
-      {
-          zr_layout_row_dynamic(ctx, 25, 1);
-
-          if (zr_menu_item(ctx, ZR_TEXT_LEFT, "Test"))
-            printf("test \n");
-          if (zr_menu_item(ctx, ZR_TEXT_LEFT, "About"))
-             printf("test \n");
-         if (zr_menu_item(ctx, ZR_TEXT_LEFT, "Exit"))
-            rarch_ctl(RARCH_CTL_FORCE_QUIT, NULL);
-
-         zr_menu_end(ctx);
-      }
-      if (zr_menu_text_begin(ctx, &menu, "Window", ZR_TEXT_LEFT|ZR_TEXT_MIDDLE, 120))
-      {
-          zr_layout_row_dynamic(ctx, 25, 1);
-
-         if (zr_menu_item(ctx, ZR_TEXT_LEFT, "Control"))
-         {
-            zr_window_close(ctx, "Control");
-            zr->window_enabled[ZRMENU_WND_CONTROL] =
-               !zr->window_enabled[ZRMENU_WND_CONTROL];
-         }
-
-         if (zr_menu_item(ctx, ZR_TEXT_LEFT, "Shader Parameters"))
-         {
-            zr_window_close(ctx, "Shader Parameters");
-            zr->window_enabled[ZRMENU_WND_SHADER_PARAMETERS] =
-               !zr->window_enabled[ZRMENU_WND_SHADER_PARAMETERS];
-         }
-
-         if (zr_menu_item(ctx, ZR_TEXT_LEFT, "Test Window"))
-         {
-            zr_window_close(ctx, "Test");
-            zr->window_enabled[ZRMENU_WND_TEST] =
-               !zr->window_enabled[ZRMENU_WND_TEST];
-         }
-
-         zr_menu_end(ctx);
-      }
-      zr_layout_row_push(ctx, 60);
-      zr_menubar_end(ctx);
-
-   }
-
-   if (zr->resize)
-      zr_window_set_size(ctx, zr_vec2(zr_window_get_size(ctx).x, zr->height));
-
-   zr_end(ctx);
-}
-
-static void zrmenu_main(struct zrmenu *gui, zrmenu_handle_t *zr)
-{
-   struct zr_context *ctx = &gui->ctx;
-
-   zrmenu_wnd_main(ctx, gui, zr);
-
-   if (zr->window_enabled[ZRMENU_WND_CONTROL])
-      zrmenu_wnd_control(ctx, gui, zr);
-   if (zr->window_enabled[ZRMENU_WND_SHADER_PARAMETERS])
-      zrmenu_wnd_shader_parameters(ctx, gui, zr);
-   if (zr->window_enabled[ZRMENU_WND_TEST])
-      zrmenu_wnd_test(ctx, gui, zr);
-
-   zr->window_enabled[ZRMENU_WND_CONTROL] = !zr_window_is_closed(ctx, "Control");
-   zr->window_enabled[ZRMENU_WND_SHADER_PARAMETERS] = !zr_window_is_closed(ctx, "Shader Parameters");
-   zr->window_enabled[ZRMENU_WND_TEST] = !zr_window_is_closed(ctx, "Test");
-   zr_buffer_info(&gui->status, &gui->ctx.memory);
-}
-
-static char* zrmenu_file_load(const char* path, size_t* size)
-{
-   char *buf;
-   FILE *fd = fopen(path, "rb");
-
-   fseek(fd, 0, SEEK_END);
-   *size = (size_t)ftell(fd);
-   fseek(fd, 0, SEEK_SET);
-   buf = (char*)calloc(*size, 1);
-   fread(buf, *size, 1, fd);
-   fclose(fd);
-   return buf;
-}
-
-
-static void zr_device_init(struct zr_device *dev)
-{
-#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
-   GLint status;
-   static const GLchar *vertex_shader =
-      "#version 300 es\n"
-      "uniform mat4 ProjMtx;\n"
-      "in vec2 Position;\n"
-      "in vec2 TexCoord;\n"
-      "in vec4 Color;\n"
-      "out vec2 Frag_UV;\n"
-      "out vec4 Frag_Color;\n"
-      "void main() {\n"
-      "   Frag_UV = TexCoord;\n"
-      "   Frag_Color = Color;\n"
-      "   gl_Position = ProjMtx * vec4(Position.xy, 0, 1);\n"
-      "}\n";
-   static const GLchar *fragment_shader =
-      "#version 300 es\n"
-      "precision mediump float;\n"
-      "uniform sampler2D Texture;\n"
-      "in vec2 Frag_UV;\n"
-      "in vec4 Frag_Color;\n"
-      "out vec4 Out_Color;\n"
-      "void main(){\n"
-      "   Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n"
-      "}\n";
-
-   dev->prog = glCreateProgram();
-   dev->vert_shdr = glCreateShader(GL_VERTEX_SHADER);
-   dev->frag_shdr = glCreateShader(GL_FRAGMENT_SHADER);
-   glShaderSource(dev->vert_shdr, 1, &vertex_shader, 0);
-   glShaderSource(dev->frag_shdr, 1, &fragment_shader, 0);
-   glCompileShader(dev->vert_shdr);
-   glCompileShader(dev->frag_shdr);
-   glGetShaderiv(dev->vert_shdr, GL_COMPILE_STATUS, &status);
-   assert(status == GL_TRUE);
-   glGetShaderiv(dev->frag_shdr, GL_COMPILE_STATUS, &status);
-   assert(status == GL_TRUE);
-   glAttachShader(dev->prog, dev->vert_shdr);
-   glAttachShader(dev->prog, dev->frag_shdr);
-   glLinkProgram(dev->prog);
-   glGetProgramiv(dev->prog, GL_LINK_STATUS, &status);
-   assert(status == GL_TRUE);
-
-   dev->uniform_proj = glGetUniformLocation(dev->prog, "ProjMtx");
-   dev->attrib_pos   = glGetAttribLocation(dev->prog, "Position");
-   dev->attrib_uv    = glGetAttribLocation(dev->prog, "TexCoord");
-   dev->attrib_col   = glGetAttribLocation(dev->prog, "Color");
-
-   {
-      /* buffer setup */
-      GLsizei vs = sizeof(struct zr_draw_vertex);
-      size_t vp = offsetof(struct zr_draw_vertex, position);
-      size_t vt = offsetof(struct zr_draw_vertex, uv);
-      size_t vc = offsetof(struct zr_draw_vertex, col);
-
-      glGenBuffers(1, &dev->vbo);
-      glGenBuffers(1, &dev->ebo);
-      glGenVertexArrays(1, &dev->vao);
-
-      glBindVertexArray(dev->vao);
-      glBindBuffer(GL_ARRAY_BUFFER, dev->vbo);
-      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dev->ebo);
-
-      glEnableVertexAttribArray((GLuint)dev->attrib_pos);
-      glEnableVertexAttribArray((GLuint)dev->attrib_uv);
-      glEnableVertexAttribArray((GLuint)dev->attrib_col);
-
-      glVertexAttribPointer((GLuint)dev->attrib_pos, 2, GL_FLOAT, GL_FALSE, vs, (void*)vp);
-      glVertexAttribPointer((GLuint)dev->attrib_uv, 2, GL_FLOAT, GL_FALSE, vs, (void*)vt);
-      glVertexAttribPointer((GLuint)dev->attrib_col, 4, GL_UNSIGNED_BYTE, GL_TRUE, vs, (void*)vc);
-   }
-
-   glBindTexture(GL_TEXTURE_2D, 0);
-   glBindBuffer(GL_ARRAY_BUFFER, 0);
-   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-   glBindVertexArray(0);
-#endif
-}
-
-static struct zr_user_font font_bake_and_upload(
-      struct zr_device *dev,
-      struct zr_font *font,
-      const char *path,
-      unsigned int font_height,
-      const zr_rune *range)
-{
-   int glyph_count;
-   int img_width, img_height;
-   struct zr_font_glyph *glyphes;
-   struct zr_baked_font baked_font;
-   struct zr_user_font user_font;
-   struct zr_recti custom;
-
-   memset(&baked_font, 0, sizeof(baked_font));
-   memset(&user_font, 0, sizeof(user_font));
-   memset(&custom, 0, sizeof(custom));
-
-   {
-      struct texture_image ti;
-      /* bake and upload font texture */
-      struct zr_font_config config;
-      void *img, *tmp;
-      size_t ttf_size;
-      size_t tmp_size, img_size;
-      const char *custom_data = "....";
-      char *ttf_blob = zrmenu_file_load(path, &ttf_size);
-       /* setup font configuration */
-      memset(&config, 0, sizeof(config));
-
-      config.ttf_blob     = ttf_blob;
-      config.ttf_size     = ttf_size;
-      config.font         = &baked_font;
-      config.coord_type   = ZR_COORD_UV;
-      config.range        = range;
-      config.pixel_snap   = zr_false;
-      config.size         = (float)font_height;
-      config.spacing      = zr_vec2(0,0);
-      config.oversample_h = 1;
-      config.oversample_v = 1;
-
-      /* query needed amount of memory for the font baking process */
-      zr_font_bake_memory(&tmp_size, &glyph_count, &config, 1);
-      glyphes = (struct zr_font_glyph*)
-         calloc(sizeof(struct zr_font_glyph), (size_t)glyph_count);
-      tmp = calloc(1, tmp_size);
-
-      /* pack all glyphes and return needed image width, height and memory size*/
-      custom.w = 2; custom.h = 2;
-      zr_font_bake_pack(&img_size,
-            &img_width,&img_height,&custom,tmp,tmp_size,&config, 1);
-
-      /* bake all glyphes and custom white pixel into image */
-      img = calloc(1, img_size);
-      zr_font_bake(img, img_width,
-            img_height, tmp, tmp_size, glyphes, glyph_count, &config, 1);
-      zr_font_bake_custom_data(img,
-            img_width, img_height, custom, custom_data, 2, 2, '.', 'X');
-
-      {
-         /* convert alpha8 image into rgba8 image */
-         void *img_rgba = calloc(4, (size_t)(img_height * img_width));
-         zr_font_bake_convert(img_rgba, img_width, img_height, img);
-         free(img);
-         img = img_rgba;
-      }
-
-      /* upload baked font image */
-      ti.pixels = (uint32_t*)img;
-      ti.width  = (GLsizei)img_width;
-      ti.height = (GLsizei)img_height;
-
-      video_driver_texture_load(&ti,
-            TEXTURE_FILTER_MIPMAP_NEAREST, (uintptr_t*)&dev->font_tex);
-
-      free(ttf_blob);
-      free(tmp);
-      free(img);
-   }
-
-   /* default white pixel in a texture which is needed to draw primitives */
-   dev->null.texture.id = (int)dev->font_tex;
-   dev->null.uv = zr_vec2((custom.x + 0.5f)/(float)img_width,
-      (custom.y + 0.5f)/(float)img_height);
-
-   /* setup font with glyphes. IMPORTANT: the font only references the glyphes
-      this was done to have the possibility to have multible fonts with one
-      total glyph array. Not quite sure if it is a good thing since the
-      glyphes have to be freed as well. */
-   zr_font_init(font,
-         (float)font_height, '?', glyphes,
-         &baked_font, dev->null.texture);
-   user_font = zr_font_ref(font);
-   return user_font;
-}
-
-static void zr_device_shutdown(struct zr_device *dev)
-{
-#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
-   glDetachShader(dev->prog, dev->vert_shdr);
-   glDetachShader(dev->prog, dev->frag_shdr);
-   glDeleteShader(dev->vert_shdr);
-   glDeleteShader(dev->frag_shdr);
-   glDeleteProgram(dev->prog);
-   glDeleteTextures(1, &dev->font_tex);
-   glDeleteBuffers(1, &dev->vbo);
-   glDeleteBuffers(1, &dev->ebo);
-#endif
-}
-
-static void zr_device_draw(struct zr_device *dev,
-      struct zr_context *ctx, int width, int height,
-      enum zr_anti_aliasing AA)
-{
-#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
-   GLint last_prog, last_tex;
-   GLint last_ebo, last_vbo, last_vao;
-   GLfloat ortho[4][4] = {
-      {2.0f, 0.0f, 0.0f, 0.0f},
-      {0.0f,-2.0f, 0.0f, 0.0f},
-      {0.0f, 0.0f,-1.0f, 0.0f},
-      {-1.0f,1.0f, 0.0f, 1.0f},
-   };
-   ortho[0][0] /= (GLfloat)width;
-   ortho[1][1] /= (GLfloat)height;
-
-   /* save previous opengl state */
-   glGetIntegerv(GL_CURRENT_PROGRAM, &last_prog);
-   glGetIntegerv(GL_TEXTURE_BINDING_2D, &last_tex);
-   glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &last_vao);
-   glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &last_ebo);
-   glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &last_vbo);
-
-   /* setup global state */
-   glEnable(GL_BLEND);
-   glBlendEquation(GL_FUNC_ADD);
-   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-   glActiveTexture(GL_TEXTURE0);
-
-   /* setup program */
-   glUseProgram(dev->prog);
-   glUniformMatrix4fv(dev->uniform_proj, 1, GL_FALSE, &ortho[0][0]);
-
-   {
-      /* convert from command queue into draw list and draw to screen */
-      const struct zr_draw_command *cmd;
-      void *vertices, *elements;
-      const zr_draw_index *offset = NULL;
-
-      /* allocate vertex and element buffer */
-      glBindVertexArray(dev->vao);
-      glBindBuffer(GL_ARRAY_BUFFER, dev->vbo);
-      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, dev->ebo);
-
-      glBufferData(GL_ARRAY_BUFFER, MAX_VERTEX_MEMORY, NULL, GL_STREAM_DRAW);
-      glBufferData(GL_ELEMENT_ARRAY_BUFFER, MAX_ELEMENT_MEMORY, NULL, GL_STREAM_DRAW);
-
-      /* load draw vertices & elements directly into vertex + element buffer */
-      vertices = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-      elements = glMapBuffer(GL_ELEMENT_ARRAY_BUFFER, GL_WRITE_ONLY);
-      {
-         struct zr_buffer vbuf, ebuf;
-
-         /* fill converting configuration */
-         struct zr_convert_config config;
-         memset(&config, 0, sizeof(config));
-         config.global_alpha = 1.0f;
-         config.shape_AA = AA;
-         config.line_AA = AA;
-         config.circle_segment_count = 22;
-         config.line_thickness = 1.0f;
-         config.null = dev->null;
-
-         /* setup buffers to load vertices and elements */
-         zr_buffer_init_fixed(&vbuf, vertices, MAX_VERTEX_MEMORY);
-         zr_buffer_init_fixed(&ebuf, elements, MAX_ELEMENT_MEMORY);
-         zr_convert(ctx, &dev->cmds, &vbuf, &ebuf, &config);
-      }
-      glUnmapBuffer(GL_ARRAY_BUFFER);
-      glUnmapBuffer(GL_ELEMENT_ARRAY_BUFFER);
-
-      /* iterate over and execute each draw command */
-      zr_draw_foreach(cmd, ctx, &dev->cmds)
-      {
-         if (!cmd->elem_count)
-            continue;
-         glBindTexture(GL_TEXTURE_2D, (GLuint)cmd->texture.id);
-         glScissor((GLint)cmd->clip_rect.x,
-            height - (GLint)(cmd->clip_rect.y + cmd->clip_rect.h),
-            (GLint)cmd->clip_rect.w, (GLint)cmd->clip_rect.h);
-         glDrawElements(GL_TRIANGLES, (GLsizei)cmd->elem_count,
-               GL_UNSIGNED_SHORT, offset);
-         offset += cmd->elem_count;
-       }
-       zr_clear(ctx);
-   }
-
-   /* restore old state */
-   glUseProgram((GLuint)last_prog);
-   glBindTexture(GL_TEXTURE_2D, (GLuint)last_tex);
-   glBindBuffer(GL_ARRAY_BUFFER, (GLuint)last_vbo);
-   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, (GLuint)last_ebo);
-   glBindVertexArray((GLuint)last_vao);
-   glDisable(GL_BLEND);
-#endif
-}
-
-static void* zrmenu_mem_alloc(zr_handle unused, size_t size)
-{
-   (void)unused;
-   return calloc(1, size);
-}
-
-static void zrmenu_mem_free(zr_handle unused, void *ptr)
-{
-   (void)unused;
-   free(ptr);
+   struct zr_context *ctx = &zr->ctx;
+
+   if (zr->window[ZRMENU_WND_MAIN].open)
+      zrmenu_wnd_main(zr);
+   if (zr->window[ZRMENU_WND_CONTROL].open)
+      zrmenu_wnd_control(zr);
+   if (zr->window[ZRMENU_WND_SHADER_PARAMETERS].open)
+      zrmenu_wnd_shader_parameters(zr);
+   if (zr->window[ZRMENU_WND_TEST].open)
+      zrmenu_wnd_test(zr);
+   if (zr->window[ZRMENU_WND_WIZARD].open)
+      zrmenu_wnd_wizard(zr);
+
+   zr->window[ZRMENU_WND_CONTROL].open = !zr_window_is_closed(ctx, "Control");
+   zr->window[ZRMENU_WND_SHADER_PARAMETERS].open = !zr_window_is_closed(ctx, "Shader Parameters");
+   zr->window[ZRMENU_WND_TEST].open = !zr_window_is_closed(ctx, "Test");
+   zr->window[ZRMENU_WND_WIZARD].open = !zr_window_is_closed(ctx, "Setup Wizard");
+
+   if(zr_window_is_closed(ctx, "Setup Wizard"))
+      zr->window[ZRMENU_WND_MAIN].open = true;
+
+   zr_buffer_info(&zr->status, &zr->ctx.memory);
 }
 
 static void zrmenu_input_mouse_movement(struct zr_context *ctx)
@@ -991,6 +186,9 @@ static void zrmenu_frame(void *data)
    zrmenu_handle_t *zr = (zrmenu_handle_t*)data;
    settings_t *settings  = config_get_ptr();
 
+   bool libretro_running = menu_display_ctl(
+         MENU_DISPLAY_CTL_LIBRETRO_RUNNING, NULL);
+
    if (!zr)
       return;
 
@@ -998,21 +196,21 @@ static void zrmenu_frame(void *data)
 
    menu_display_ctl(MENU_DISPLAY_CTL_SET_VIEWPORT, NULL);
 
-   zr_input_begin(&gui.ctx);
-   zrmenu_input_mouse_movement(&gui.ctx);
-   zrmenu_input_mouse_button(&gui.ctx);
-   zrmenu_input_keyboard(&gui.ctx);
+   zr_input_begin(&zr->ctx);
+   zrmenu_input_mouse_movement(&zr->ctx);
+   zrmenu_input_mouse_button(&zr->ctx);
+   zrmenu_input_keyboard(&zr->ctx);
 
-   if (width != zr->width || height != zr->height)
+   if (width != zr->size.x || height != zr->size.y)
    {
-      zr->width = width;
-      zr->height = height;
-      zr->resize = true;
+      zr->size.x = width;
+      zr->size.y = height;
+      zr->size_changed = true;
    }
 
-   zr_input_end(&gui.ctx);
-   zrmenu_main(&gui, zr);
-   zr_device_draw(&device, &gui.ctx, width, height, ZR_ANTI_ALIASING_ON);
+   zr_input_end(&zr->ctx);
+   zrmenu_main(zr);
+   zr_common_device_draw(&device, &zr->ctx, width, height, ZR_ANTI_ALIASING_ON);
 
    if (settings->menu.mouse.enable && (settings->video.fullscreen
             || !video_driver_ctl(RARCH_DISPLAY_CTL_HAS_WINDOWED, NULL)))
@@ -1041,17 +239,40 @@ static void zrmenu_layout(zrmenu_handle_t *zr)
 
 }
 
-static void zrmenu_init_device(int width, int height)
+static void zrmenu_init_device(zrmenu_handle_t *zr)
 {
+   char buf[PATH_MAX_LENGTH];
+   fill_pathname_join(buf, zr->assets_directory,
+         "DroidSans.ttf", sizeof(buf));
+
    zr_alloc.userdata.ptr = NULL;
-   zr_alloc.alloc = zrmenu_mem_alloc;
-   zr_alloc.free = zrmenu_mem_free;
+   zr_alloc.alloc = zr_common_mem_alloc;
+   zr_alloc.free = zr_common_mem_free;
    zr_buffer_init(&device.cmds, &zr_alloc, 1024);
-   usrfnt = font_bake_and_upload(&device, &font, zr_font_path, 16,
+   usrfnt = zr_common_font(&device, &font, buf, 16,
       zr_font_default_glyph_ranges());
-   zr_init(&gui.ctx, &zr_alloc, &usrfnt);
-   zr_device_init(&device);
-   zrmenu_set_style(&gui.ctx, THEME_DARK);
+   zr_init(&zr->ctx, &zr_alloc, &usrfnt);
+   zr_common_device_init(&device);
+
+   fill_pathname_join(buf, zr->assets_directory, "folder.png", sizeof(buf));
+   zr->icons.folder = zr_common_image_load(buf);
+   fill_pathname_join(buf, zr->assets_directory, "speaker.png", sizeof(buf));
+   zr->icons.speaker = zr_common_image_load(buf);
+   fill_pathname_join(buf, zr->assets_directory, "gamepad.png", sizeof(buf));
+   zr->icons.gamepad = zr_common_image_load(buf);
+   fill_pathname_join(buf, zr->assets_directory, "monitor.png", sizeof(buf));
+   zr->icons.monitor = zr_common_image_load(buf);
+   fill_pathname_join(buf, zr->assets_directory, "settings.png", sizeof(buf));
+   zr->icons.settings = zr_common_image_load(buf);
+   fill_pathname_join(buf, zr->assets_directory, "invader.png", sizeof(buf));
+   zr->icons.invader = zr_common_image_load(buf);
+   fill_pathname_join(buf, zr->assets_directory, "page_on.png", sizeof(buf));
+   zr->icons.page_on = zr_common_image_load(buf);
+   fill_pathname_join(buf, zr->assets_directory, "page_off.png", sizeof(buf));
+   zr->icons.page_off = zr_common_image_load(buf);
+
+   zrmenu_set_style(&zr->ctx, THEME_DARK);
+   zr->size_changed = true;
 }
 
 static void *zrmenu_init(void **userdata)
@@ -1077,11 +298,11 @@ static void *zrmenu_init(void **userdata)
 
    *userdata = zr;
 
-   fill_pathname_join(zr_font_path, settings->assets_directory,
-         "zahnrad", sizeof(zr_font_path));
-   fill_pathname_join(zr_font_path, zr_font_path,
-         "DroidSans.ttf", sizeof(zr_font_path));
-   zrmenu_init_device(width, height);
+   fill_pathname_join(zr->assets_directory, settings->assets_directory,
+         "zahnrad", sizeof(zr->assets_directory));
+   zrmenu_init_device(zr);
+
+   zr->window[ZRMENU_WND_WIZARD].open = true;
 
    return menu;
 error:
@@ -1098,9 +319,9 @@ static void zrmenu_free(void *data)
       return;
 
    free(font.glyphs);
-   zr_free(&gui.ctx);
+   zr_free(&zr->ctx);
    zr_buffer_free(&device.cmds);
-   zr_device_shutdown(&device);
+   zr_common_device_shutdown(&device);
 
    gfx_coord_array_free(&zr->list_block.carr);
    font_driver_bind_block(NULL, NULL);
@@ -1146,7 +367,7 @@ static void zrmenu_context_reset(void *data)
    fill_pathname_slash(iconpath, sizeof(iconpath));
 
    zrmenu_layout(zr);
-   zrmenu_init_device(width, height);
+   zrmenu_init_device(zr);
 
    wimp_context_bg_destroy(zr);
    zrmenu_context_reset_textures(zr, iconpath);
@@ -1155,7 +376,7 @@ static void zrmenu_context_reset(void *data)
          menu_display_handle_wallpaper_upload, NULL);
 }
 
-static int wimp_environ(enum menu_environ_cb type, void *data, void *userdata)
+static int zrmenu_environ(enum menu_environ_cb type, void *data, void *userdata)
 {
    switch (type)
    {
@@ -1224,6 +445,6 @@ menu_ctx_driver_t menu_ctx_zr = {
    NULL,
    NULL,
    "zahnrad",
-   wimp_environ,
+   zrmenu_environ,
    NULL,
 };

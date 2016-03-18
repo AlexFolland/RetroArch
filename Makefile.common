@@ -186,8 +186,9 @@ OBJ += frontend/frontend.o \
        gfx/video_filter.o \
        audio/audio_resampler_driver.o \
        audio/audio_dsp_filter.o \
-       audio/drivers_resampler/sinc.o \
-       audio/drivers_resampler/nearest.o \
+       audio/drivers_resampler/sinc_resampler.o \
+       audio/drivers_resampler/nearest_resampler.o \
+       audio/drivers_resampler/null_resampler.o \
        audio/drivers_resampler/cc_resampler.o \
        location/drivers/nulllocation.o \
        camera/drivers/nullcamera.o \
@@ -350,7 +351,7 @@ endif
 # Audio Resamplers
 
 ifeq ($(HAVE_NEON),1)
-   OBJ += audio/drivers_resampler/sinc_neon.o \
+   OBJ += audio/drivers_resampler/sinc_resampler_neon.o \
           audio/drivers_resampler/cc_resampler_neon.o
    # When compiled without this, tries to attempt to compile sinc lerp,
    # which will error out
@@ -411,6 +412,8 @@ ifeq ($(HAVE_MATERIALUI), 1)
 endif
 ifeq ($(HAVE_ZAHNRAD), 1)
    OBJ += deps/zahnrad/zahnrad.o
+   OBJ += menu/drivers/zr_common.o
+   OBJ += menu/drivers/zr_menu.o
    OBJ += menu/drivers/zr.o
    DEFINES += -DHAVE_ZAHNRAD
 endif
@@ -755,7 +758,7 @@ ifeq ($(HAVE_VULKAN), 1)
 			  -Ideps/glslang/glslang/SPIRV \
 			  -Ideps/glslang
 
-	CXXFLAGS += -Wno-switch -Wno-sign-compare -fno-strict-aliasing -Wno-maybe-uninitialized -I./gfx/include/vulkan
+	CXXFLAGS += -Wno-switch -Wno-sign-compare -fno-strict-aliasing -Wno-maybe-uninitialized -Wno-reorder -I./gfx/include/vulkan
    CFLAGS  += -I./gfx/include/vulkan
 
 	GLSLANG_OBJ := $(GLSLANG_SOURCES:.cpp=.o)
@@ -965,7 +968,7 @@ ifeq ($(HAVE_NETWORKING), 1)
    endif
 
    # Retro Achievements (also depends on threads)
-   
+
    ifeq ($(HAVE_CHEEVOS), 1)
       ifeq ($(HAVE_THREADS), 1)
          DEFINES += -DHAVE_CHEEVOS

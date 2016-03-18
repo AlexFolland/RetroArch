@@ -1,5 +1,5 @@
 /*  RetroArch - A frontend for libretro.
- *  Copyright (C) 2015-2016 - Andre Leiradella
+ *  Copyright (C) 2014-2016 - Ali Bouhlel ( aliaspider@gmail.com )
  *
  *  RetroArch is free software: you can redistribute it and/or modify it under the terms
  *  of the GNU General Public License as published by the Free Software Found-
@@ -13,42 +13,36 @@
  *  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __RARCH_CHEEVOS_H
-#define __RARCH_CHEEVOS_H
-
 #include <stdint.h>
 #include <stdlib.h>
-
-enum cheevos_ctl_state
+#include <math.h>
+ 
+#include "../audio_resampler_driver.h"
+typedef struct rarch_null_resampler
 {
-   CHEEVOS_CTL_NONE = 0,
-   CHEEVOS_CTL_TEST,
-   CHEEVOS_CTL_LOAD,
-
-   CHEEVOS_CTL_APPLY_CHEATS,
-
-   /* Unload the achievements from memory. */
-   CHEEVOS_CTL_UNLOAD,
-
-   /* Toggle Hardcore Mode */
-   CHEEVOS_CTL_TOGGLE_HARDCORE_MODE,
-
-   /* Load the achievements into memory if 
-    * the game has content. */
-   CHEEVOS_CTL_SET_CHEATS,
-
-   CHEEVOS_CTL_GET_DESCRIPTION,
-
-   CHEEVOS_CTL_POPULATE_MENU
+   void *empty;
+} rarch_null_resampler_t;
+ 
+static void resampler_null_process(
+      void *re_, struct resampler_data *data)
+{
+}
+ 
+static void resampler_null_free(void *re_)
+{
+}
+ 
+static void *resampler_null_init(const struct resampler_config *config,
+      double bandwidth_mod, resampler_simd_mask_t mask)
+{
+   return (void*)0;
+}
+ 
+rarch_resampler_t null_resampler = {
+   resampler_null_init,
+   resampler_null_process,
+   resampler_null_free,
+   RESAMPLER_API_VERSION,
+   "null",
+   "null"
 };
-
-typedef struct cheevos_ctx_desc
-{
-   unsigned idx;
-   char *s;
-   size_t len;
-} cheevos_ctx_desc_t;
-
-bool cheevos_ctl(enum cheevos_ctl_state state, void *data);
-
-#endif /* __RARCH_CHEEVOS_H */
