@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (psp_pthread.h).
@@ -189,5 +189,12 @@ static INLINE void pthread_exit(void *retval)
 {
    (void)retval;
 }
+
+static INLINE pthread_t pthread_self(void)
+{
+   /* zero 20-mar-2016: untested */
+   return sceKernelGetThreadId();
+}
+
 
 #endif //_PSP_PTHREAD_WRAP__

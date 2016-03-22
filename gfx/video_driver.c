@@ -27,9 +27,10 @@
 #include "video_context_driver.h"
 #include "../record/record_driver.h"
 #include "../config.def.h"
-#include "../general.h"
+#include "../retroarch.h"
+#include "../runloop.h"
 #include "../performance.h"
-#include "../string_list_special.h"
+#include "../list_special.h"
 #include "../libretro_version_1.h"
 #include "../system.h"
 #include "../command_event.h"
@@ -1548,8 +1549,10 @@ bool video_driver_ctl(enum rarch_display_ctl_state state, void *data)
       case RARCH_DISPLAY_CTL_READ_VIEWPORT:
          if (!current_video->read_viewport)
             return false;
-         return current_video->read_viewport(video_driver_data,
-               (uint8_t*)data);
+         if (!current_video->read_viewport(video_driver_data,
+               (uint8_t*)data))
+            return false;
+         break;
       case RARCH_DISPLAY_CTL_CACHED_FRAME_HAS_VALID_FB:
          if (!video_driver_state.frame_cache.data)
             return false;
@@ -1569,7 +1572,9 @@ bool video_driver_ctl(enum rarch_display_ctl_state state, void *data)
 #if defined(RARCH_CONSOLE) || defined(RARCH_MOBILE)
          return false;
 #else
-         return current_video->has_windowed(video_driver_data);
+         if (!current_video->has_windowed(video_driver_data))
+            return false;
+         break;
 #endif
       case RARCH_DISPLAY_CTL_GET_FRAME_COUNT:
          {
@@ -1728,15 +1733,19 @@ bool video_driver_ctl(enum rarch_display_ctl_state state, void *data)
                !video_driver_poke || 
                !video_driver_poke->get_current_software_framebuffer)
             return false;
-         return video_driver_poke->get_current_software_framebuffer(
-               video_driver_data, (struct retro_framebuffer *)data);
+         if (!video_driver_poke->get_current_software_framebuffer(
+               video_driver_data, (struct retro_framebuffer *)data))
+            return false;
+         break;
       case RARCH_DISPLAY_CTL_GET_HW_RENDER_INTERFACE:
          if (
                !video_driver_poke || 
                !video_driver_poke->get_hw_render_interface)
             return false;
-         return video_driver_poke->get_hw_render_interface(video_driver_data,
-               (const struct retro_hw_render_interface**)data);
+         if (!video_driver_poke->get_hw_render_interface(video_driver_data,
+               (const struct retro_hw_render_interface**)data))
+            return false;
+         break;
       case RARCH_DISPLAY_CTL_VIEWPORT_INFO:
          if (!current_video || !current_video->viewport_info)
             return false;

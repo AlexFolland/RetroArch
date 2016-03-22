@@ -15,10 +15,10 @@
 
 #include <stddef.h>
 
-#include <file/file_list.h>
+#include <lists/file_list.h>
+#include <lists/dir_list.h>
 #include <file/file_path.h>
-#include <file/file_archive.h>
-#include <file/dir_list.h>
+#include <file/archive_file.h>
 #include <retro_stat.h>
 #include <string/stdstring.h>
 
@@ -30,8 +30,10 @@
 #include "../database_info.h"
 #endif
 
+#include "../defaults.h"
 #include "../cheats.h"
 #include "../general.h"
+#include "../retroarch.h"
 #include "../system.h"
 #include "../frontend/frontend_driver.h"
 #include "../ui/ui_companion_driver.h"
@@ -39,8 +41,7 @@
 #include "../config.features.h"
 #include "../git_version.h"
 #include "../input/input_config.h"
-#include "../dir_list_special.h"
-#include "../string_list_special.h"
+#include "../list_special.h"
 #include "../performance.h"
 #include "../core_info.h"
 
@@ -2818,6 +2819,7 @@ static bool menu_displaylist_push_list_process(menu_displaylist_info_t *info)
 
    if (info->need_push)
    {
+      info->label_hash = menu_hash_calculate(info->label);
       menu_driver_ctl(RARCH_MENU_CTL_POPULATE_ENTRIES, info);
       ui_companion_driver_notify_list_loaded(info->list, info->menu_list);
    }
@@ -3345,6 +3347,10 @@ bool menu_displaylist_ctl(enum menu_displaylist_ctl_state type, void *data)
                menu_hash_to_str(MENU_LABEL_VALUE_CORE_UPDATER_SETTINGS),   PARSE_ONLY_GROUP, false);
          ret = menu_displaylist_parse_settings(menu, info,
                menu_hash_to_str(MENU_LABEL_VALUE_NETWORK_SETTINGS),   PARSE_ONLY_GROUP, false);
+#ifdef HAVE_LAKKA
+         ret = menu_displaylist_parse_settings(menu, info,
+               menu_hash_to_str(MENU_LABEL_VALUE_LAKKA_SERVICES),   PARSE_ONLY_GROUP, false);
+#endif
          ret = menu_displaylist_parse_settings(menu, info,
                menu_hash_to_str(MENU_LABEL_PLAYLIST_SETTINGS),   PARSE_ACTION, false);
          ret = menu_displaylist_parse_settings(menu, info,

@@ -166,6 +166,7 @@ typedef struct settings
       unsigned title_color;
       unsigned xmb_scale_factor;
       unsigned xmb_alpha_factor;
+      unsigned xmb_theme;
       char xmb_font[PATH_MAX_LENGTH];
       bool throttle_framerate;
       bool linear_filter;
@@ -398,6 +399,11 @@ typedef struct settings
    unsigned int user_language;
 
    bool config_save_on_exit;
+
+#ifdef HAVE_LAKKA
+   bool ssh_enable;
+#endif
+
 } settings_t;
 
 /**

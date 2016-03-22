@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (gx_pthread.h).
@@ -105,6 +105,12 @@ static INLINE int pthread_create(pthread_t *thread,
    *thread = 0;
    return OSCreateThread(thread, start_routine, 0 /* unused */, arg,
          0, STACKSIZE, 64, 0 /* unused */);
+}
+
+static INLINE pthread_t pthread_self(void)
+{
+   /* zero 20-mar-2016: untested */
+   return LWP_GetSelf();
 }
 
 static INLINE int pthread_mutex_init(pthread_mutex_t *mutex,

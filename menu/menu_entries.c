@@ -511,7 +511,7 @@ void menu_entries_push(file_list_t *list, const char *path, const char *label,
    if (!list || !label)
       return;
 
-   file_list_push(list, path, label, type, directory_ptr, entry_idx);
+   file_list_append(list, path, label, type, directory_ptr, entry_idx);
 
    idx              = list->size - 1;
 
@@ -653,11 +653,11 @@ bool menu_entries_ctl(enum menu_entries_ctl_state state, void *data)
          break;
       case MENU_ENTRIES_CTL_SETTINGS_DEINIT:
          if (menu_entries_list_settings)
-            menu_setting_free(menu_entries_list_settings);
+            menu_setting_ctl(MENU_SETTING_CTL_FREE, menu_entries_list_settings);
          menu_entries_list_settings = NULL;
          break;
       case MENU_ENTRIES_CTL_SETTINGS_INIT:
-         menu_entries_list_settings      = menu_setting_new();
+         menu_setting_ctl(MENU_SETTING_CTL_NEW, &menu_entries_list_settings);
 
          if (!menu_entries_list_settings)
             return false;

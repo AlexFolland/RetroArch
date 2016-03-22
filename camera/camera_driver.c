@@ -18,8 +18,10 @@
 
 #include "camera_driver.h"
 
-#include "../general.h"
-#include "../string_list_special.h"
+#include "../configuration.h"
+#include "../retroarch.h"
+#include "../runloop.h"
+#include "../list_special.h"
 #include "../verbosity.h"
 
 static const camera_driver_t *camera_drivers[] = {

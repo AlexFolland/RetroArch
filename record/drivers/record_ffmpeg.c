@@ -34,6 +34,7 @@ extern "C" {
 #endif
 
 #include <libavcodec/avcodec.h>
+#include <libavutil/imgutils.h>
 #include <libavutil/mathematics.h>
 #include <libavutil/avutil.h>
 #include <libavutil/avstring.h>
@@ -54,7 +55,7 @@ extern "C" {
 #include <compat/msvc.h>
 
 #include <boolean.h>
-#include <queues/fifo_buffer.h>
+#include <queues/fifo_queue.h>
 #include <rthreads/rthreads.h>
 #include <gfx/scaler/scaler.h>
 #include <file/config_file.h>
@@ -510,6 +511,7 @@ static bool ffmpeg_init_video(ffmpeg_t *handle)
          param->out_height);
    video->conv_frame_buf = (uint8_t*)av_malloc(size);
    video->conv_frame = av_frame_alloc();
+
    avpicture_fill((AVPicture*)video->conv_frame, video->conv_frame_buf,
          video->pix_fmt, param->out_width, param->out_height);
 

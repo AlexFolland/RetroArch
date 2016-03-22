@@ -21,7 +21,7 @@
 #include <compat/strl.h>
 #include <file/file_path.h>
 #include <retro_endianness.h>
-#include <retro_file.h>
+#include <streams/file_stream.h>
 #include <string/stdstring.h>
 
 #include "tasks_internal.h"
@@ -30,7 +30,7 @@
 #include "../database_info.h"
 #endif
 
-#include "../dir_list_special.h"
+#include "../list_special.h"
 #include "../msg_hash.h"
 #include "../general.h"
 #include "../verbosity.h"

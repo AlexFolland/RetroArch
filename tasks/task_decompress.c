@@ -17,10 +17,10 @@
 #include "../config.h"
 #endif
 
-#include <string/string_list.h>
+#include <lists/string_list.h>
 #include <string/stdstring.h>
 #include <file/file_path.h>
-#include <file/file_archive.h>
+#include <file/archive_file.h>
 #include <retro_miscellaneous.h>
 #include <retro_stat.h>
 

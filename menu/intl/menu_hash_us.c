@@ -262,6 +262,8 @@ static const char *menu_hash_to_str_us_label(uint32_t hash)
          return "netplay_tcp_udp_port";
       case MENU_LABEL_NETPLAY_ENABLE:
          return "netplay_enable";
+      case MENU_LABEL_SSH_ENABLE:
+         return "ssh_enable";
       case MENU_LABEL_NETPLAY_DELAY_FRAMES:
          return "netplay_delay_frames";
       case MENU_LABEL_NETPLAY_MODE:
@@ -292,6 +294,8 @@ static const char *menu_hash_to_str_us_label(uint32_t hash)
          return "dpi_override_value";
       case MENU_LABEL_XMB_FONT:
          return "xmb_font";
+      case MENU_LABEL_XMB_THEME:
+         return "xmb_theme";
       case MENU_LABEL_XMB_SCALE_FACTOR:
          return "xmb_scale_factor";
       case MENU_LABEL_XMB_ALPHA_FACTOR:
@@ -1006,6 +1010,8 @@ const char *menu_hash_to_str_us(uint32_t hash)
          return "Netplay TCP/UDP Port";
       case MENU_LABEL_VALUE_NETPLAY_ENABLE:
          return "Netplay Enable";
+      case MENU_LABEL_VALUE_SSH_ENABLE:
+         return "SSH Enable";
       case MENU_LABEL_VALUE_NETPLAY_DELAY_FRAMES:
          return "Netplay Delay Frames";
       case MENU_LABEL_VALUE_NETPLAY_MODE:
@@ -1040,6 +1046,8 @@ const char *menu_hash_to_str_us(uint32_t hash)
          return "XMB Alpha Factor";
       case MENU_LABEL_VALUE_XMB_FONT:
          return "XMB Font";
+      case MENU_LABEL_VALUE_XMB_THEME:
+         return "XMB Theme";
       case MENU_LABEL_VALUE_SUSPEND_SCREENSAVER_ENABLE:
          return "Suspend Screensaver";
       case MENU_LABEL_VALUE_VIDEO_DISABLE_COMPOSITION:
@@ -1632,6 +1640,8 @@ const char *menu_hash_to_str_us(uint32_t hash)
          return "Updater";
       case MENU_LABEL_VALUE_NETWORK_SETTINGS:
          return "Network";
+      case MENU_LABEL_VALUE_LAKKA_SERVICES:
+         return "Lakka Services";
       case MENU_LABEL_VALUE_PLAYLIST_SETTINGS:
          return "Playlists";
       case MENU_LABEL_VALUE_USER_SETTINGS:

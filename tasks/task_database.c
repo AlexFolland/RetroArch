@@ -18,7 +18,7 @@
 #include <retro_miscellaneous.h>
 #include <retro_endianness.h>
 #include <string/stdstring.h>
-#include <file/dir_list.h>
+#include <lists/dir_list.h>
 #include <file/file_path.h>
 #include <queues/message_queue.h>
 
@@ -28,7 +28,7 @@
 #include "../database_info.h"
 #endif
 
-#include "../dir_list_special.h"
+#include "../list_special.h"
 #include "../msg_hash.h"
 #include "../playlist.h"
 #include "../verbosity.h"

@@ -20,9 +20,6 @@
 #include <stddef.h>
 
 #include <boolean.h>
-#include <string/string_list.h>
-
-#include "libretro.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,7 +37,7 @@ typedef struct core_option_manager core_option_manager_t;
  * Returns: handle to new core manager handle, otherwise NULL.
  **/
 core_option_manager_t *core_option_new(const char *conf_path,
-      const struct retro_variable *vars);
+      const void *data);
 
 /**
  * core_option_updated:
@@ -85,8 +82,7 @@ bool core_option_flush_game_specific(
  **/
 void core_option_free(core_option_manager_t *opt);
 
-void core_option_get(core_option_manager_t *opt, 
-      struct retro_variable *var);
+void core_option_get(core_option_manager_t *opt,  void *data);
 
 /**
  * core_option_size:
@@ -121,19 +117,6 @@ const char *core_option_get_desc(core_option_manager_t *opt,
  **/
 const char *core_option_get_val(core_option_manager_t *opt, 
       size_t idx);
-
-/**
- * core_option_get_vals:
- * @opt                   : pointer to core option manager object.
- * @idx                   : idx of core option.
- *
- * Gets list of core option values from core option at index @idx.
- *
- * Returns: string list of core option values if successful, otherwise
- * NULL.
- **/
-struct string_list *core_option_get_vals(
-      core_option_manager_t *opt, size_t idx);
 
 void core_option_set_val(core_option_manager_t *opt,
       size_t idx, size_t val_idx);

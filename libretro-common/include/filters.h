@@ -23,6 +23,7 @@
 #ifndef _LIBRETRO_SDK_FILTERS_H
 #define _LIBRETRO_SDK_FILTERS_H
 
+#include <stdlib.h>
 #include <math.h>
 #include <retro_inline.h>
 
@@ -31,6 +32,21 @@ static INLINE double sinc(double val)
    if (fabs(val) < 0.00001)
       return 1.0;
    return sin(val) / val;
+}
+
+/* Paeth prediction filter. */
+static INLINE int paeth(int a, int b, int c)
+{
+   int p  = a + b - c;
+   int pa = abs(p - a);
+   int pb = abs(p - b);
+   int pc = abs(p - c);
+
+   if (pa <= pb && pa <= pc)
+      return a;
+   else if (pb <= pc)
+      return b;
+   return c;
 }
 
 /* Modified Bessel function of first order.

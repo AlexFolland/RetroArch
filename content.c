@@ -40,18 +40,19 @@
 #include <compat/posix_string.h>
 #include <file/file_path.h>
 #ifdef HAVE_COMPRESSION
-#include <file/file_archive.h>
+#include <file/archive_file.h>
 #endif
 #include <string/stdstring.h>
 
 #include <retro_miscellaneous.h>
-#include <retro_file.h>
+#include <streams/file_stream.h>
 #include <retro_stat.h>
 #include <retro_assert.h>
 
-#include <string/string_list.h>
+#include <lists/string_list.h>
 #include <string/stdstring.h>
 
+#include "defaults.h"
 #include "msg_hash.h"
 #include "content.h"
 #include "general.h"

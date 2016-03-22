@@ -35,6 +35,7 @@
 #include "retroarch.h"
 #include "system.h"
 #include "verbosity.h"
+#include "lakka.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -480,6 +481,7 @@ static void config_set_defaults(void)
             def_menu,  sizeof(settings->menu.driver));
    settings->menu.xmb_scale_factor   = xmb_scale_factor;
    settings->menu.xmb_alpha_factor   = xmb_alpha_factor;
+   settings->menu.xmb_theme          = xmb_theme;
    settings->menu.xmb_font[0]        = '\0';
    settings->menu.throttle_framerate = true;
    settings->menu.linear_filter      = true;
@@ -597,6 +599,10 @@ static void config_set_defaults(void)
    settings->stdin_cmd_enable                  = stdin_cmd_enable;
    settings->content_history_size              = default_content_history_size;
    settings->libretro_log_level                = libretro_log_level;
+
+#ifdef HAVE_LAKKA
+   settings->ssh_enable = path_file_exists(LAKKA_SSH_PATH);
+#endif
 
 #ifdef HAVE_MENU
    if (first_initialized)
@@ -1530,6 +1536,7 @@ static bool config_load_file(const char *path, bool set_defaults)
    config_get_array(conf, "menu_driver",     settings->menu.driver, sizeof(settings->menu.driver));
    CONFIG_GET_INT_BASE(conf, settings, menu.xmb_scale_factor, "xmb_scale_factor");
    CONFIG_GET_INT_BASE(conf, settings, menu.xmb_alpha_factor, "xmb_alpha_factor");
+   CONFIG_GET_INT_BASE(conf, settings, menu.xmb_theme, "xmb_theme");
    config_get_path(conf, "xmb_font", settings->menu.xmb_font, sizeof(settings->menu.xmb_font));
 #endif
    config_get_array(conf, "video_context_driver", settings->video.context_driver, sizeof(settings->video.context_driver));
@@ -1540,8 +1547,10 @@ static bool config_load_file(const char *path, bool set_defaults)
    config_get_array(conf, "input_joypad_driver", settings->input.joypad_driver, sizeof(settings->input.joypad_driver));
    config_get_array(conf, "input_keyboard_layout", settings->input.keyboard_layout, sizeof(settings->input.keyboard_layout));
 
+#if 0
    if (!global->has_set.libretro)
       config_get_path(conf, "libretro_path", settings->libretro, sizeof(settings->libretro));
+#endif
    if (!global->has_set.libretro_directory)
       config_get_path(conf, "libretro_directory", settings->libretro_directory, sizeof(settings->libretro_directory));
 
@@ -1718,6 +1727,10 @@ static bool config_load_file(const char *path, bool set_defaults)
    CONFIG_GET_BOOL_BASE(conf, settings, network_cmd_enable, "network_cmd_enable");
    CONFIG_GET_INT_BASE(conf, settings, network_cmd_port, "network_cmd_port");
    CONFIG_GET_BOOL_BASE(conf, settings, stdin_cmd_enable, "stdin_cmd_enable");
+#endif
+
+#ifdef HAVE_LAKKA
+   settings->ssh_enable = path_file_exists(LAKKA_SSH_PATH);
 #endif
 
 #ifdef HAVE_NETWORK_GAMEPAD
@@ -2520,6 +2533,7 @@ bool config_save_autoconf_profile(const char *path, unsigned user)
  **/
 bool config_save_file(const char *path)
 {
+   float msg_color;
    unsigned i           = 0;
    bool ret             = false;
    config_file_t *conf  = config_file_new(path);
@@ -2561,7 +2575,9 @@ bool config_save_file(const char *path)
          settings->multimedia.builtin_imageviewer_enable);
    config_set_bool(conf,  "fps_show", settings->fps_show);
    config_set_bool(conf,  "ui_menubar_enable", settings->ui.menubar_enable);
+#if 0
    config_set_path(conf,  "libretro_path", settings->libretro);
+#endif
    config_set_path(conf,  "core_options_path", settings->core_options_path);
 
    config_set_path(conf,  "recording_output_directory", global->record.output_dir);
@@ -2695,6 +2711,11 @@ bool config_save_file(const char *path)
    config_set_float(conf, "video_font_size", settings->video.font_size);
    config_set_bool(conf,  "video_font_enable", settings->video.font_enable);
 
+   msg_color = (((int)(settings->video.msg_color_r * 255.0f) & 0xff) << 16) +
+               (((int)(settings->video.msg_color_g * 255.0f) & 0xff) <<  8) +
+               (((int)(settings->video.msg_color_b * 255.0f) & 0xff));
+   config_set_hex(conf, "video_message_color", msg_color);
+
    if (!global->has_set.ups_pref)
       config_set_bool(conf, "ups_pref", global->patch.ups_pref);
    if (!global->has_set.bps_pref)
@@ -2744,6 +2765,7 @@ bool config_save_file(const char *path)
 #ifdef HAVE_MENU
    config_set_int(conf, "xmb_scale_factor", settings->menu.xmb_scale_factor);
    config_set_int(conf, "xmb_alpha_factor", settings->menu.xmb_alpha_factor);
+   config_set_int(conf, "xmb_theme", settings->menu.xmb_theme);
    config_set_path(conf, "xmb_font",
          !string_is_empty(settings->menu.xmb_font) ? settings->menu.xmb_font : "");
    config_set_path(conf, "rgui_browser_directory",
@@ -2829,6 +2851,13 @@ bool config_save_file(const char *path)
          settings->stdin_cmd_enable);
    config_set_int(conf, "network_cmd_port",
          settings->network_cmd_port);
+#endif
+
+#ifdef HAVE_LAKKA
+   if (settings->ssh_enable)
+      fclose(fopen(LAKKA_SSH_PATH, "w"));
+   else
+      remove(LAKKA_SSH_PATH);
 #endif
 
    config_set_float(conf, "fastforward_ratio", settings->fastforward_ratio);

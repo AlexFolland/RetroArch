@@ -17,11 +17,12 @@
 
 #include <compat/strl.h>
 #include <file/file_path.h>
-#include <file/dir_list.h>
+#include <lists/dir_list.h>
 #include <string/stdstring.h>
 
 #include "command_event.h"
 
+#include "defaults.h"
 #include "frontend/frontend_driver.h"
 #include "audio/audio_driver.h"
 #include "record/record_driver.h"
@@ -38,7 +39,7 @@
 #include "rewind.h"
 #include "system.h"
 #include "ui/ui_companion_driver.h"
-#include "dir_list_special.h"
+#include "list_special.h"
 
 #ifdef HAVE_CHEEVOS
 #include "cheevos.h"
@@ -669,11 +670,10 @@ static bool event_save_core_config(void)
    global_t   *global                = global_get_ptr();
 
    *config_dir = '\0';
-
-   if (*settings->menu_config_directory)
+   if (!string_is_empty(settings->menu_config_directory))
       strlcpy(config_dir, settings->menu_config_directory,
             sizeof(config_dir));
-   else if (*global->path.config) /* Fallback */
+   else if (!string_is_empty(global->path.config)) /* Fallback */
       fill_pathname_basedir(config_dir, global->path.config,
             sizeof(config_dir));
    else
@@ -683,10 +683,11 @@ static bool event_save_core_config(void)
       return false;
    }
    /* Infer file name based on libretro core. */
-   if (*settings->libretro && path_file_exists(settings->libretro))
+   if (!string_is_empty(settings->libretro) 
+   && path_file_exists(settings->libretro))
    {
       unsigned i;
-
+      RARCH_LOG("Using core name for new config\n");
       /* In case of collision, find an alternative name. */
       for (i = 0; i < 16; i++)
       {
@@ -702,7 +703,7 @@ static bool event_save_core_config(void)
          else
             strlcpy(tmp, ".cfg", sizeof(tmp));
 
-         snprintf(config_path, sizeof(config_path), "%s%s", config_path, tmp);
+         strlcat(config_path, tmp, sizeof(config_path));
          if (!path_file_exists(config_path))
          {
             found_path = true;
@@ -1013,6 +1014,8 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
 
                libretro_get_system_info(settings->libretro, system,
                      ptr);
+#else
+               libretro_get_system_info_static(system, ptr);
 #endif
                info_find.path = settings->libretro;
 

@@ -18,7 +18,6 @@
 #define __CONFIG_DEF_H
 
 #include <boolean.h>
-#include "libretro.h"
 #include "driver.h"
 #include "gfx/video_driver.h"
 
@@ -511,6 +510,7 @@ static bool default_block_config_read = true;
 
 static unsigned xmb_scale_factor = 100;
 static unsigned xmb_alpha_factor = 75;
+static unsigned xmb_theme = 0;
 
 static bool show_advanced_settings    = true;
 static const uint32_t menu_entry_normal_color = 0xffffffff;

@@ -38,14 +38,15 @@
 #include <boolean.h>
 #include <retro_dirent.h>
 #include <retro_inline.h>
-#include <retro_file.h>
 #include <compat/strl.h>
 #include <rhash.h>
 #include <file/file_path.h>
+#include <streams/file_stream.h>
 #include <string/stdstring.h>
 
 #include "../frontend.h"
 #include "../frontend_driver.h"
+#include "../../defaults.h"
 #include "../../general.h"
 #include "../../verbosity.h"
 #include "platform_linux.h"
@@ -2193,9 +2194,6 @@ static void frontend_linux_exec(const char *path, bool should_load_game)
    newargv[0] = malloc(len);
 
    strlcpy(newargv[0], path, len);
-
-   execv(path, newargv);
-   perror("execv");
 }
 
 static void frontend_linux_exitspawn(char *core_path, size_t core_path_size)

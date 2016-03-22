@@ -16,15 +16,15 @@
  */
 
 #include <file/file_path.h>
-#include <file/dir_list.h>
-#include <file/file_archive.h>
+#include <lists/dir_list.h>
+#include <file/archive_file.h>
 #include <compat/strl.h>
 
 #include <string/stdstring.h>
 
 #include "core_info.h"
 #include "configuration.h"
-#include "dir_list_special.h"
+#include "list_special.h"
 #include "config.def.h"
 
 #ifdef HAVE_CONFIG_H

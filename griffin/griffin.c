@@ -24,7 +24,12 @@
 
 #include <compat/posix_string.h>
 
+#if _MSC_VER
+#include "../libretro-common/compat/compat_snprintf.c"
+#endif
+
 #include "../verbosity.c"
+
 #if defined(HAVE_LOGGER) && !defined(ANDROID)
 #include "../netlogger.c"
 #endif
@@ -40,9 +45,13 @@ CONSOLE EXTENSIONS
 
 #endif
 
+/*============================================================
+ARCHIVE FILE
+============================================================ */
+
 #ifdef HAVE_ZLIB
-#include "../libretro-common/file/file_archive.c"
-#include "../libretro-common/file/file_archive_zlib.c"
+#include "../libretro-common/file/archive_file.c"
+#include "../libretro-common/file/archive_file_zlib.c"
 #endif
 
 /*============================================================
@@ -91,7 +100,7 @@ CONFIG FILE
 #endif
 
 #include "../libretro-common/file/config_file.c"
-#include "../libretro-common/file/config_file_userdata.c"
+#include "../config_file_userdata.c"
 #include "../core_options.c"
 
 /*============================================================
@@ -474,7 +483,7 @@ STATE TRACKER
 /*============================================================
 FIFO BUFFER
 ============================================================ */
-#include "../libretro-common/queues/fifo_buffer.c"
+#include "../libretro-common/queues/fifo_queue.c"
 
 /*============================================================
 AUDIO RESAMPLER
@@ -629,16 +638,15 @@ FILE
 #include "../content.c"
 #include "../libretro-common/file/file_path.c"
 #include "../file_path_special.c"
-#include "../libretro-common/file/dir_list.c"
+#include "../libretro-common/lists/dir_list.c"
+#include "../libretro-common/lists/string_list.c"
+#include "../libretro-common/lists/file_list.c"
 #include "../libretro-common/file/retro_dirent.c"
-#include "../libretro-common/file/retro_file.c"
+#include "../libretro-common/streams/file_stream.c"
 #include "../libretro-common/file/retro_stat.c"
-#include "../dir_list_special.c"
-#include "../string_list_special.c"
-#include "../libretro-common/string/string_list.c"
+#include "../list_special.c"
 #include "../libretro-common/string/stdstring.c"
 #include "../libretro-common/file/nbio/nbio_stdio.c"
-#include "../libretro-common/file/file_list.c"
 
 /*============================================================
 MESSAGE

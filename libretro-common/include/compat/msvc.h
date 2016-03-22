@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (msvc_compat.h).
@@ -25,14 +25,32 @@
 
 #ifdef _MSC_VER
 
+#ifdef __cplusplus
+extern "C"  {
+#endif
+
 /* Pre-MSVC 2015 compilers don't implement snprintf in a cross-platform manner. */
 #if _MSC_VER < 1900
-#ifndef snprintf
-#define snprintf _snprintf
+   #include <stdlib.h>
+   #ifndef snprintf
+      #define snprintf c99_snprintf_retro__
+   #endif
+   
+   int c99_snprintf_retro__(char *outBuf, size_t size, const char *format, ...);
 #endif
-#ifndef vsnprintf
-#define vsnprintf _vsnprintf
+
+/* Pre-MSVC 2010 compilers don't implement vsnprintf in a cross-platform manner? Not sure about this one. */
+#if _MSC_VER < 1600 
+   #include <stdarg.h>
+   #include <stdlib.h>
+   #ifndef vsnprintf
+      #define vsnprintf c99_vsnprintf_retro__
+   #endif
+   int c99_vsnprintf_retro__(char *outBuf, size_t size, const char *format, va_list ap);
 #endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #undef UNICODE /* Do not bother with UNICODE at this time. */
@@ -68,7 +86,9 @@ typedef int ssize_t;
 #pragma warning(disable : 4723)
 #pragma warning(disable : 4996)
 
+#if _MSC_VER < 1200
 #define roundf(in) (in >= 0.0f ? floorf(in + 0.5f) : ceilf(in - 0.5f))
+#endif
 
 #ifndef PATH_MAX
 #define PATH_MAX _MAX_PATH

@@ -23,7 +23,7 @@
 #include <limits.h>
 
 #include <file/file_path.h>
-#include <file/dir_list.h>
+#include <lists/dir_list.h>
 #include <compat/posix_string.h>
 #include <gfx/math/matrix_4x4.h>
 #include <string/stdstring.h>
@@ -35,7 +35,7 @@
 
 #include "../../config.def.h"
 
-#include "../../dir_list_special.h"
+#include "../../list_special.h"
 
 #include "../menu_driver.h"
 #include "../menu_animation.h"

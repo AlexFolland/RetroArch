@@ -18,7 +18,6 @@
 #define __RETROARCH_H
 
 #include <boolean.h>
-#include <retro_miscellaneous.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -173,6 +172,15 @@ enum rarch_content_type rarch_path_is_media_type(const char *path);
 const char *rarch_get_current_savefile_dir(void);
 
 bool rarch_game_options_validate(char *s, size_t len, bool mkdir);
+
+/**
+ * retro_fail:
+ * @error_code  : Error code.
+ * @error       : Error message to show.
+ *
+ * Sanely kills the program.
+ **/
+void retro_fail(int error_code, const char *error);
 
 #ifdef __cplusplus
 }

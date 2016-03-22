@@ -28,12 +28,13 @@
 #include "menu_shader.h"
 
 #include "../content.h"
+#include "../dynamic.h"
 #include "../core_info.h"
-#include "../general.h"
+#include "../retroarch.h"
 #include "../system.h"
 #include "../defaults.h"
 #include "../frontend/frontend.h"
-#include "../string_list_special.h"
+#include "../list_special.h"
 #include "../tasks/tasks_internal.h"
 #include "../ui/ui_companion_driver.h"
 #include "../verbosity.h"
@@ -423,10 +424,8 @@ bool menu_driver_ctl(enum rarch_menu_ctl_state state, void *data)
          }
          break;
       case RARCH_MENU_CTL_SYSTEM_INFO_DEINIT:
-#ifdef HAVE_DYNAMIC
          libretro_free_system_info(&menu_driver_system);
          memset(&menu_driver_system, 0, sizeof(struct retro_system_info));
-#endif
          break;
       case RARCH_MENU_CTL_RENDER_MESSAGEBOX:
          if (menu_driver_ctx->render_messagebox)

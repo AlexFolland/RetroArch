@@ -1,4 +1,4 @@
-/* Copyright  (C) 2010-2015 The RetroArch team
+/* Copyright  (C) 2010-2016 The RetroArch team
  *
  * ---------------------------------------------------------------------------------------
  * The following license statement only applies to this file (compat_getopt.h).
@@ -60,7 +60,17 @@ extern int optind, opterr, optopt;
 #ifdef __cplusplus
 }
 #endif
+
+/* If these are variously #defined, then we have bigger problems */
+#ifndef no_argument
+   #define no_argument 0
+   #define required_argument 1
+   #define optional_argument 2
 #endif
 
+/* HAVE_GETOPT_LONG */
+#endif
+
+/* pragma once */
 #endif
 

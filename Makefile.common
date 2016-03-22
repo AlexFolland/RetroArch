@@ -129,16 +129,15 @@ OBJ += frontend/frontend.o \
        tasks/task_file_transfer.o \
        content.o \
        libretro-common/encodings/encoding_utf.o \
-       libretro-common/file/file_list.o \
-       libretro-common/file/dir_list.o \
+       libretro-common/lists/file_list.o \
+       libretro-common/lists/dir_list.o \
        libretro-common/file/retro_dirent.o \
-       libretro-common/file/retro_file.o \
+       libretro-common/streams/file_stream.o \
        libretro-common/file/retro_stat.o \
-       libretro-common/string/string_list.o \
+       libretro-common/lists/string_list.o \
        libretro-common/string/stdstring.o \
        libretro-common/memmap/memalign.o \
-       dir_list_special.o \
-       string_list_special.o \
+       list_special.o \
        libretro-common/file/nbio/nbio_stdio.o \
        libretro-common/file/file_path.o \
        file_path_special.o \
@@ -166,14 +165,14 @@ OBJ += frontend/frontend.o \
        tasks/task_overlay.o \
        input/input_overlay.o \
        patch.o \
-       libretro-common/queues/fifo_buffer.o \
+       libretro-common/queues/fifo_queue.o \
        core_options.o \
        libretro-common/compat/compat_fnmatch.o \
        libretro-common/compat/compat_posix_string.o \
        cheats.o \
        core_info.o \
        libretro-common/file/config_file.o \
-       libretro-common/file/config_file_userdata.o \
+       config_file_userdata.o \
        screenshot.o \
        libretro-common/gfx/scaler/scaler.o \
        gfx/drivers_shader/shader_null.o \
@@ -750,25 +749,31 @@ ifeq ($(HAVE_VULKAN), 1)
 		$(wildcard deps/glslang/glslang/glslang/MachineIndependent/preprocessor/*.cpp) \
 		$(wildcard deps/glslang/glslang/glslang/OSDependent/$(GLSLANG_PLATFORM)/*.cpp)
 
+	SPIR2CROSS_SOURCES := deps/spir2cross/spir2cross.cpp
+
 	DEFINES += \
 			  -Ideps/glslang/glslang/glslang/OSDependent/$(GLSLANG_PLATFORM) \
 			  -Ideps/glslang/glslang \
 			  -Ideps/glslang/glslang/glslang/MachineIndependent \
 			  -Ideps/glslang/glslang/glslang/Public \
 			  -Ideps/glslang/glslang/SPIRV \
-			  -Ideps/glslang
+			  -Ideps/glslang \
+			  -Ideps/spir2cross
 
 	CXXFLAGS += -Wno-switch -Wno-sign-compare -fno-strict-aliasing -Wno-maybe-uninitialized -Wno-reorder -I./gfx/include/vulkan
    CFLAGS  += -I./gfx/include/vulkan
 
 	GLSLANG_OBJ := $(GLSLANG_SOURCES:.cpp=.o)
+	SPIR2CROSS_OBJ := $(SPIR2CROSS_SOURCES:.cpp=.o)
 
 	OBJ += gfx/drivers/vulkan.o \
 			 gfx/common/vulkan_common.o \
 			 gfx/drivers_font/vulkan_raster_font.o \
 			 gfx/drivers_shader/shader_vulkan.o \
 			 gfx/drivers_shader/glslang_util.o \
-			 $(GLSLANG_OBJ)
+			 gfx/drivers_shader/slang_reflection.o \
+			 $(GLSLANG_OBJ) \
+			 $(SPIR2CROSS_OBJ)
 	ifeq ($(HAVE_MENU_COMMON), 1)
 		OBJ += menu/drivers_display/menu_display_vulkan.o
 	endif
@@ -874,8 +879,8 @@ endif
 
 
 ifeq ($(HAVE_ZLIB), 1)
-   OBJ += libretro-common/file/file_archive.o \
-          libretro-common/file/file_archive_zlib.o \
+   OBJ += libretro-common/file/archive_file.o \
+          libretro-common/file/archive_file_zlib.o \
           tasks/task_decompress.o
    OBJ += $(ZLIB_OBJS)
    DEFINES += -DHAVE_ZLIB

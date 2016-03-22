@@ -17,11 +17,14 @@
 #include <string.h>
 
 #include <file/config_file.h>
-#include <file/dir_list.h>
+#include <lists/dir_list.h>
+#include <lists/string_list.h>
 #include <compat/posix_string.h>
 #include <compat/strl.h>
 #include <retro_miscellaneous.h>
 #include <string/stdstring.h>
+
+#include "libretro.h"
 
 #include "core_options.h"
 
@@ -77,9 +80,10 @@ void core_option_free(core_option_manager_t *opt)
    free(opt);
 }
 
-void core_option_get(core_option_manager_t *opt, struct retro_variable *var)
+void core_option_get(core_option_manager_t *opt, void *data)
 {
    size_t i;
+   struct retro_variable *var = (struct retro_variable*)data;
 
    if (!opt)
       return;
@@ -166,11 +170,12 @@ static bool parse_variable(core_option_manager_t *opt, size_t idx,
  * Returns: handle to new core manager handle, otherwise NULL.
  **/
 core_option_manager_t *core_option_new(const char *conf_path,
-      const struct retro_variable *vars)
+      const void *data)
 {
    const struct retro_variable *var;
-   size_t size                      = 0;
-   core_option_manager_t *opt       = (core_option_manager_t*)
+   const struct retro_variable *vars = (const struct retro_variable*)data;
+   size_t size                       = 0;
+   core_option_manager_t *opt        = (core_option_manager_t*)
       calloc(1, sizeof(*opt));
 
    if (!opt)
@@ -322,24 +327,6 @@ const char *core_option_get_val(core_option_manager_t *opt, size_t idx)
    if (!option)
       return NULL;
    return option->vals->elems[option->index].data;
-}
-
-/**
- * core_option_get_vals:
- * @opt                   : pointer to core option manager object.
- * @idx                   : idx of core option.
- *
- * Gets list of core option values from core option at index @idx.
- *
- * Returns: string list of core option values if successful, otherwise
- * NULL.
- **/
-struct string_list *core_option_get_vals(
-      core_option_manager_t *opt, size_t idx)
-{
-   if (!opt)
-      return NULL;
-   return opt->opts[idx].vals;
 }
 
 void core_option_set_val(core_option_manager_t *opt,
