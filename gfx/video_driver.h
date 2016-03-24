@@ -99,6 +99,10 @@ enum rarch_display_ctl_state
    RARCH_DISPLAY_CTL_DEINIT,
    RARCH_DISPLAY_CTL_DESTROY,
    RARCH_DISPLAY_CTL_DESTROY_DATA,
+   RARCH_DISPLAY_CTL_LOCK,
+   RARCH_DISPLAY_CTL_UNLOCK,
+   RARCH_DISPLAY_CTL_LOCK_FREE,
+   RARCH_DISPLAY_CTL_LOCK_NEW,
    RARCH_DISPLAY_CTL_SUPPORTS_RGBA,
    RARCH_DISPLAY_CTL_SET_RGBA,
    RARCH_DISPLAY_CTL_UNSET_RGBA,
@@ -539,16 +543,6 @@ bool video_driver_texture_load(void *data,
       uintptr_t *id);
 
 bool video_driver_texture_unload(uintptr_t *id);
-
-#ifdef HAVE_OPENGL
-void gl_load_texture_data(uint32_t id,
-      enum gfx_wrap_type wrap_type,
-      enum texture_filter_type filter_type,
-      unsigned alignment,
-      unsigned width, unsigned height,
-      const void *frame,
-      unsigned base_size);
-#endif
 
 extern video_driver_t video_gl;
 extern video_driver_t video_vulkan;

@@ -21,7 +21,6 @@
 #include "input_keyboard.h"
 
 #include "../general.h"
-#include "../system.h"
 
 struct input_keyboard_line
 {
@@ -52,9 +51,9 @@ static void input_keyboard_line_toggle_osk(bool enable)
       return;
 
    if (enable)
-      input_driver_ctl(RARCH_INPUT_CTL_SET_KEYBOARD_LINEFEED_ENABLED, NULL);
+      input_keyboard_ctl(RARCH_INPUT_KEYBOARD_CTL_SET_LINEFEED_ENABLED, NULL);
    else
-      input_driver_ctl(RARCH_INPUT_CTL_UNSET_KEYBOARD_LINEFEED_ENABLED, NULL);
+      input_keyboard_ctl(RARCH_INPUT_KEYBOARD_CTL_UNSET_LINEFEED_ENABLED, NULL);
 }
 
 /**
@@ -63,7 +62,7 @@ static void input_keyboard_line_toggle_osk(bool enable)
  *
  * Frees input keyboard line handle.
  **/
-void input_keyboard_line_free(input_keyboard_line_t *state)
+static void input_keyboard_line_free(input_keyboard_line_t *state)
 {
    if (!state)
       return;
@@ -85,7 +84,7 @@ void input_keyboard_line_free(input_keyboard_line_t *state)
  *
  * Returns: keyboard handle on success, otherwise NULL.
  **/
-input_keyboard_line_t *input_keyboard_line_new(void *userdata,
+static input_keyboard_line_t *input_keyboard_line_new(void *userdata,
       input_keyboard_line_complete_t cb)
 {
    input_keyboard_line_t *state = (input_keyboard_line_t*)
@@ -110,7 +109,7 @@ input_keyboard_line_t *input_keyboard_line_new(void *userdata,
  *
  * Returns: true (1) on success, otherwise false (0).
  **/
-bool input_keyboard_line_event(
+static bool input_keyboard_line_event(
       input_keyboard_line_t *state, uint32_t character)
 {
    char c = character >= 128 ? '?' : character;
@@ -158,74 +157,29 @@ bool input_keyboard_line_event(
 }
 
 /**
- * input_keyboard_line_get_buffer:
- * @state                    : Input keyboard line handle.
- *
- * Gets the underlying buffer of the keyboard line.
- *
- * The underlying buffer can be reallocated at any time 
- * (or be NULL), but the pointer to it remains constant 
- * throughout the objects lifetime.
- *
- * Returns: pointer to string.
- **/
-const char **input_keyboard_line_get_buffer(
-      const input_keyboard_line_t *state)
-{
-   return (const char**)&state->buffer;
-}
-
-/**
  * input_keyboard_start_line:
  * @userdata                 : Userdata.
  * @cb                       : Line complete callback function.
  *
  * Sets function pointer for keyboard line handle.
  *
- * Returns: underlying buffer returned by 
- * input_keyboard_line_get_buffer().
+ * The underlying buffer can be reallocated at any time 
+ * (or be NULL), but the pointer to it remains constant 
+ * throughout the objects lifetime.
+ *
+ * Returns: underlying buffer of the keyboard line.
  **/
 const char **input_keyboard_start_line(void *userdata,
       input_keyboard_line_complete_t cb)
 {
-   if (g_keyboard_line)
-      input_keyboard_line_free(g_keyboard_line);
+   input_keyboard_ctl(RARCH_INPUT_KEYBOARD_CTL_LINE_FREE, NULL);
 
    g_keyboard_line = input_keyboard_line_new(userdata, cb);
 
    /* While reading keyboard line input, we have to block all hotkeys. */
    input_driver_keyboard_mapping_set_block(true);
 
-   return input_keyboard_line_get_buffer(g_keyboard_line);
-}
-
-/**
- * input_keyboard_wait_keys:
- * @userdata                 : Userdata.
- * @cb                       : Callback function.
- *
- * Waits for keys to be pressed (used for binding keys in the menu).
- * Callback returns false when all polling is done.
- **/
-void input_keyboard_wait_keys(void *userdata, input_keyboard_press_t cb)
-{
-   g_keyboard_press_cb = cb;
-   g_keyboard_press_data = userdata;
-
-   /* While waiting for input, we have to block all hotkeys. */
-   input_driver_keyboard_mapping_set_block(true);
-}
-
-/**
- * input_keyboard_wait_keys_cancel:
- *
- * Cancels function callback set by input_keyboard_wait_keys().
- **/
-void input_keyboard_wait_keys_cancel(void)
-{
-   g_keyboard_press_cb   = NULL;
-   g_keyboard_press_data = NULL;
-   input_driver_keyboard_mapping_set_block(false);
+   return (const char**)&g_keyboard_line->buffer;
 }
 
 /**
@@ -248,14 +202,12 @@ void input_keyboard_event(bool down, unsigned code,
       if (down)
          return;
 
-      input_keyboard_wait_keys_cancel();
+      input_keyboard_ctl(RARCH_INPUT_KEYBOARD_CTL_CANCEL_WAIT_KEYS, NULL);
       deferred_wait_keys = false;
    }
    else if (g_keyboard_press_cb)
    {
-      if (!down)
-         return;
-      if (code == RETROK_UNKNOWN)
+      if (!down || code == RETROK_UNKNOWN)
          return;
       if (g_keyboard_press_cb(g_keyboard_press_data, code))
          return;
@@ -280,8 +232,7 @@ void input_keyboard_event(bool down, unsigned code,
       }
 
       /* Line is complete, can free it now. */
-      input_keyboard_line_free(g_keyboard_line);
-      g_keyboard_line = NULL;
+      input_keyboard_ctl(RARCH_INPUT_KEYBOARD_CTL_LINE_FREE, NULL);
 
       /* Unblock all hotkeys. */
       input_driver_keyboard_mapping_set_block(false);
@@ -294,4 +245,53 @@ void input_keyboard_event(bool down, unsigned code,
       if (key_event && *key_event)
          (*key_event)(down, code, character, mod);
    }
+}
+
+bool input_keyboard_ctl(enum rarch_input_keyboard_ctl_state state, void *data)
+{
+   static bool input_driver_keyboard_linefeed_enable = false;
+
+   switch (state)
+   {
+      case RARCH_INPUT_KEYBOARD_CTL_LINE_FREE:
+         if (g_keyboard_line)
+            input_keyboard_line_free(g_keyboard_line);
+         g_keyboard_line = NULL;
+         break;
+      case RARCH_INPUT_KEYBOARD_CTL_START_WAIT_KEYS:
+         {
+            input_keyboard_ctx_wait_t *keys = (input_keyboard_ctx_wait_t*)data;
+
+            if (!keys)
+               return false;
+
+            g_keyboard_press_cb   = keys->cb;
+            g_keyboard_press_data = keys->userdata;
+         }
+
+         /* While waiting for input, we have to block all hotkeys. */
+         input_driver_keyboard_mapping_set_block(true);
+         break;
+      case RARCH_INPUT_KEYBOARD_CTL_CANCEL_WAIT_KEYS:
+         g_keyboard_press_cb   = NULL;
+         g_keyboard_press_data = NULL;
+         input_driver_keyboard_mapping_set_block(false);
+         break;
+      case RARCH_INPUT_KEYBOARD_CTL_DESTROY:
+         input_driver_keyboard_linefeed_enable = false;
+         break;
+      case RARCH_INPUT_KEYBOARD_CTL_SET_LINEFEED_ENABLED:
+         input_driver_keyboard_linefeed_enable = true;
+         break;
+      case RARCH_INPUT_KEYBOARD_CTL_UNSET_LINEFEED_ENABLED:
+         input_driver_keyboard_linefeed_enable = false;
+         break;
+      case RARCH_INPUT_KEYBOARD_CTL_IS_LINEFEED_ENABLED:
+         return input_driver_keyboard_linefeed_enable;
+      case RARCH_INPUT_KEYBOARD_CTL_NONE:
+      default:
+         break;
+   }
+
+   return true;
 }

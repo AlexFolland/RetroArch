@@ -21,9 +21,32 @@
 extern "C" {
 #endif
 
-#include <boolean.h>
-#include "../libretro.h"
 #include <stdint.h>
+
+#include <boolean.h>
+
+#include "../libretro.h"
+
+enum rarch_input_keyboard_ctl_state
+{
+   RARCH_INPUT_KEYBOARD_CTL_NONE = 0,
+   RARCH_INPUT_KEYBOARD_CTL_DESTROY,
+   RARCH_INPUT_KEYBOARD_CTL_SET_LINEFEED_ENABLED,
+   RARCH_INPUT_KEYBOARD_CTL_UNSET_LINEFEED_ENABLED,
+   RARCH_INPUT_KEYBOARD_CTL_IS_LINEFEED_ENABLED,
+
+   RARCH_INPUT_KEYBOARD_CTL_LINE_FREE,
+
+   /*
+    * Waits for keys to be pressed (used for binding 
+    * keys in the menu).
+    * Callback returns false when all polling is done.
+    **/
+   RARCH_INPUT_KEYBOARD_CTL_START_WAIT_KEYS,
+
+   /* Cancels keyboard wait for keys function callback. */
+   RARCH_INPUT_KEYBOARD_CTL_CANCEL_WAIT_KEYS
+};
 
 /* Keyboard line reader. Handles textual input in a direct fashion. */
 typedef struct input_keyboard_line input_keyboard_line_t;
@@ -37,54 +60,11 @@ typedef void (*input_keyboard_line_complete_t)(void *userdata,
 
 typedef bool (*input_keyboard_press_t)(void *userdata, unsigned code);
 
-/**
- * input_keyboard_line_new:
- * @userdata                 : Userdata.
- * @cb                       : Callback function.
- *
- * Creates and initializes input keyboard line handle.
- * Also sets callback function for keyboard line handle
- * to provided callback @cb.
- *
- * Returns: keyboard handle on success, otherwise NULL.
- **/
-input_keyboard_line_t *input_keyboard_line_new(void *userdata,
-      input_keyboard_line_complete_t cb);
-
-/**
- * input_keyboard_line_event:
- * @state                    : Input keyboard line handle.
- * @character                : Inputted character.
- *
- * Called on every keyboard character event.
- *
- * Returns: true (1) on success, otherwise false (0).
- **/
-bool input_keyboard_line_event(input_keyboard_line_t *state,
-      uint32_t character);
-
-/**
- * input_keyboard_line_get_buffer:
- * @state                    : Input keyboard line handle.
- *
- * Gets the underlying buffer of the keyboard line.
- *
- * The underlying buffer can be reallocated at any time 
- * (or be NULL), but the pointer to it remains constant 
- * throughout the objects lifetime.
- *
- * Returns: pointer to string.
- **/
-const char **input_keyboard_line_get_buffer(
-      const input_keyboard_line_t *state);
-
-/**
- * input_keyboard_line_free:
- * @state                    : Input keyboard line handle.
- *
- * Frees input keyboard line handle.
- **/
-void input_keyboard_line_free(input_keyboard_line_t *state);
+typedef struct input_keyboard_ctx_wait
+{
+   void *userdata;
+   input_keyboard_press_t cb;
+} input_keyboard_ctx_wait_t;
 
 /**
  * input_keyboard_event:
@@ -106,28 +86,17 @@ void input_keyboard_event(bool down, unsigned code, uint32_t character,
  *
  * Sets function pointer for keyboard line handle.
  *
- * Returns: underlying buffer returned by 
- * input_keyboard_line_get_buffer().
+ * The underlying buffer can be reallocated at any time 
+ * (or be NULL), but the pointer to it remains constant 
+ * throughout the objects lifetime.
+ *
+ * Returns: underlying buffer of the keyboard line.
  **/
 const char **input_keyboard_start_line(void *userdata,
       input_keyboard_line_complete_t cb);
 
-/**
- * input_keyboard_wait_keys:
- * @userdata                 : Userdata.
- * @cb                       : Callback function.
- *
- * Waits for keys to be pressed (used for binding keys in the menu).
- * Callback returns false when all polling is done.
- **/
-void input_keyboard_wait_keys(void *userdata, input_keyboard_press_t cb);
 
-/**
- * input_keyboard_wait_keys_cancel:
- *
- * Cancels function callback set by input_keyboard_wait_keys().
- **/
-void input_keyboard_wait_keys_cancel(void);
+bool input_keyboard_ctl(enum rarch_input_keyboard_ctl_state state, void *data);
 
 #ifdef __cplusplus
 }

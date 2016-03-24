@@ -38,6 +38,7 @@
 #include "../../input/input_remapping.h"
 #include "../../retroarch.h"
 #include "../../system.h"
+#include "../../lakka.h"
 
 enum
 {
@@ -1331,7 +1332,7 @@ static void cb_generic_download(void *task_data,
          break;
       }
       case CB_LAKKA_DOWNLOAD:
-         dir_path = "/storage/.update/"; /* TODO unhardcode this ? */
+         dir_path = LAKKA_UPDATE_DIR;
          break;
       default:
          RARCH_WARN("Unknown transfer type '%u' bailing out.\n",
@@ -1353,7 +1354,7 @@ static void cb_generic_download(void *task_data,
    fill_pathname_join(output_path, dir_path,
          transf->path, sizeof(output_path));
 
-   if (!retro_write_file(output_path, data->data, data->len))
+   if (!filestream_write_file(output_path, data->data, data->len))
    {
       err = "Write failed.";
       goto finish;
