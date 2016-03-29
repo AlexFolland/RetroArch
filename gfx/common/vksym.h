@@ -29,8 +29,6 @@
 
 #define VKFUNC(sym) (vkcfp.sym)
 
-#define VK_PROTOTYPES
-
 #ifdef HAVE_WAYLAND
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #endif
@@ -191,6 +189,7 @@ typedef struct vulkan_context_fp
 
    /* Image commands */
    PFN_vkCmdCopyImage                            vkCmdCopyImage;
+   PFN_vkCmdClearColorImage                      vkCmdClearColorImage;
 
    /* Pipeline commands */
    PFN_vkCmdBindPipeline                         vkCmdBindPipeline;

@@ -576,6 +576,7 @@ static bool vulkan_init_default_filter_chain(vk_t *vk)
    memset(&info, 0, sizeof(info));
 
    info.device                = vk->context->device;
+   info.gpu                   = vk->context->gpu;
    info.memory_properties     = &vk->context->memory_properties;
    info.pipeline_cache        = vk->pipelines.cache;
    info.max_input_size.width  = vk->tex_w;
@@ -584,6 +585,7 @@ static bool vulkan_init_default_filter_chain(vk_t *vk)
    info.swapchain.format      = vk->context->swapchain_format;
    info.swapchain.render_pass = vk->render_pass;
    info.swapchain.num_indices = vk->context->num_swapchain_images;
+   info.original_format       = vk->tex_fmt;
 
    vk->filter_chain           = vulkan_filter_chain_create_default(
          &info,
@@ -606,6 +608,7 @@ static bool vulkan_init_filter_chain_preset(vk_t *vk, const char *shader_path)
    memset(&info, 0, sizeof(info));
 
    info.device                = vk->context->device;
+   info.gpu                   = vk->context->gpu;
    info.memory_properties     = &vk->context->memory_properties;
    info.pipeline_cache        = vk->pipelines.cache;
    info.max_input_size.width  = vk->tex_w;
@@ -614,6 +617,7 @@ static bool vulkan_init_filter_chain_preset(vk_t *vk, const char *shader_path)
    info.swapchain.format      = vk->context->swapchain_format;
    info.swapchain.render_pass = vk->render_pass;
    info.swapchain.num_indices = vk->context->num_swapchain_images;
+   info.original_format       = vk->tex_fmt;
 
    vk->filter_chain           = vulkan_filter_chain_create_from_preset(
          &info, shader_path,
@@ -870,6 +874,9 @@ static void vulkan_init_hw_render(vk_t *vk)
    iface->set_command_buffers = vulkan_set_command_buffers;
    iface->lock_queue          = vulkan_lock_queue;
    iface->unlock_queue        = vulkan_unlock_queue;
+
+   iface->get_device_proc_addr   = VKFUNC(vkGetDeviceProcAddr);
+   iface->get_instance_proc_addr = VKFUNC(vkGetInstanceProcAddr);
 }
 
 static void vulkan_init_readback(vk_t *vk)
@@ -908,6 +915,7 @@ static void *vulkan_init(const video_info_t *video,
    gfx_ctx_mode_t mode;
    gfx_ctx_input_t inp;
    unsigned interval;
+   unsigned full_x, full_y;
    unsigned win_width;
    unsigned win_height;
    unsigned temp_width                = 0;
@@ -927,12 +935,12 @@ static void *vulkan_init(const video_info_t *video,
    gfx_ctx_ctl(GFX_CTL_SET, (void*)ctx_driver);
 
    gfx_ctx_ctl(GFX_CTL_GET_VIDEO_SIZE, &mode);
-   vk->full_x = mode.width;
-   vk->full_y = mode.height;
+   full_x = mode.width;
+   full_y = mode.height;
    mode.width  = 0;
    mode.height = 0;
 
-   RARCH_LOG("Detecting screen resolution %ux%u.\n", vk->full_x, vk->full_y);
+   RARCH_LOG("Detecting screen resolution %ux%u.\n", full_x, full_y);
    interval = video->vsync ? settings->video.swap_interval : 0;
    gfx_ctx_ctl(GFX_CTL_SWAP_INTERVAL, &interval);
 
@@ -941,8 +949,8 @@ static void *vulkan_init(const video_info_t *video,
 
    if (video->fullscreen && (win_width == 0) && (win_height == 0))
    {
-      win_width  = vk->full_x;
-      win_height = vk->full_y;
+      win_width  = full_x;
+      win_height = full_y;
    }
 
    mode.width      = win_width;
@@ -960,14 +968,6 @@ static void *vulkan_init(const video_info_t *video,
    video_driver_get_size(&temp_width, &temp_height);
 
    RARCH_LOG("Vulkan: Using resolution %ux%u\n", temp_width, temp_height);
-
-   /* FIXME: Is this check right? */
-   if (vk->full_x || vk->full_y)
-   {
-      /* We got bogus from gfx_ctx_get_video_size. Replace. */
-      vk->full_x = temp_width;
-      vk->full_y = temp_height;
-   }
 
    gfx_ctx_ctl(GFX_CTL_GET_CONTEXT_DATA, &vk->context);
 
@@ -1479,6 +1479,7 @@ static bool vulkan_frame(void *data, const void *frame,
 
    /* Notify filter chain about the new sync index. */
    vulkan_filter_chain_notify_sync_index(vk->filter_chain, frame_index);
+   vulkan_filter_chain_set_frame_count(vk->filter_chain, frame_count);
 
    retro_perf_start(&build_cmd);
    /* Render offscreen filter chain passes. */
@@ -1495,6 +1496,7 @@ static bool vulkan_frame(void *data, const void *frame,
             return false;
          }
 
+         input.image        = vk->hw.image->create_info.image;
          input.view         = vk->hw.image->image_view;
          input.layout       = vk->hw.image->image_layout;
 
@@ -1520,6 +1522,7 @@ static bool vulkan_frame(void *data, const void *frame,
          else
             vulkan_transition_texture(vk, tex);
 
+         input.image  = tex->image;
          input.view   = tex->view;
          input.layout = tex->layout;
          input.width  = tex->width;

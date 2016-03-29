@@ -99,10 +99,13 @@ static string build_stage_source(const vector<string> &lines, const char *stage)
 
    for (auto itr = begin(lines) + 1; itr != end(lines); ++itr)
    {
-      if (itr->find("#pragma stage ") != string::npos)
+      if (itr->find("#pragma stage ") == 0)
       {
-         auto expected = string("#pragma stage ") + stage;
-         active = itr->find(expected) != string::npos;
+         if (stage)
+         {
+            auto expected = string("#pragma stage ") + stage;
+            active = itr->find(expected) != string::npos;
+         }
 
          // Improve debuggability.
          if (active)
@@ -112,6 +115,11 @@ static string build_stage_source(const vector<string> &lines, const char *stage)
             str << '\n';
          }
       }
+      else if (itr->find("#pragma name ") == 0 ||
+               itr->find("#pragma format ") == 0)
+      {
+         // Ignore
+      }
       else if (active)
          str << *itr;
       str << '\n';
@@ -120,16 +128,144 @@ static string build_stage_source(const vector<string> &lines, const char *stage)
    return str.str();
 }
 
+static const char *glslang_formats[] = {
+   "R8_UNORM",
+   "R8_UINT",
+   "R8_SINT",
+   "R8G8_UNORM",
+   "R8G8_UINT",
+   "R8G8_SINT",
+   "R8G8B8A8_UNORM",
+   "R8G8B8A8_UINT",
+   "R8G8B8A8_SINT",
+   "R8G8B8A8_SRGB",
+
+   "A2B10G10R10_UNORM_PACK32",
+   "A2B10G10R10_UINT_PACK32",
+
+   "R16_UINT",
+   "R16_SINT",
+   "R16_SFLOAT",
+   "R16G16_UINT",
+   "R16G16_SINT",
+   "R16G16_SFLOAT",
+   "R16G16B16A16_UINT",
+   "R16G16B16A16_SINT",
+   "R16G16B16A16_SFLOAT",
+
+   "R32_UINT",
+   "R32_SINT",
+   "R32_SFLOAT",
+   "R32G32_UINT",
+   "R32G32_SINT",
+   "R32G32_SFLOAT",
+   "R32G32B32A32_UINT",
+   "R32G32B32A32_SINT",
+   "R32G32B32A32_SFLOAT",
+
+   "UNKNOWN",
+};
+
+const char *glslang_format_to_string(enum glslang_format fmt)
+{
+   return glslang_formats[fmt];
+}
+
+static glslang_format glslang_find_format(const char *fmt)
+{
+#undef FMT
+#define FMT(x) if (!strcmp(fmt, #x)) return SLANG_FORMAT_ ## x
+   FMT(R8_UNORM);
+   FMT(R8_UINT);
+   FMT(R8_SINT);
+   FMT(R8G8_UNORM);
+   FMT(R8G8_UINT);
+   FMT(R8G8_SINT);
+   FMT(R8G8B8A8_UNORM);
+   FMT(R8G8B8A8_UINT);
+   FMT(R8G8B8A8_SINT);
+   FMT(R8G8B8A8_SRGB);
+
+   FMT(A2B10G10R10_UNORM_PACK32);
+   FMT(A2B10G10R10_UINT_PACK32);
+
+   FMT(R16_UINT);
+   FMT(R16_SINT);
+   FMT(R16_SFLOAT);
+   FMT(R16G16_UINT);
+   FMT(R16G16_SINT);
+   FMT(R16G16_SFLOAT);
+   FMT(R16G16B16A16_UINT);
+   FMT(R16G16B16A16_SINT);
+   FMT(R16G16B16A16_SFLOAT);
+
+   FMT(R32_UINT);
+   FMT(R32_SINT);
+   FMT(R32_SFLOAT);
+   FMT(R32G32_UINT);
+   FMT(R32G32_SINT);
+   FMT(R32G32_SFLOAT);
+   FMT(R32G32B32A32_UINT);
+   FMT(R32G32B32A32_SINT);
+   FMT(R32G32B32A32_SFLOAT);
+
+   return SLANG_FORMAT_UNKNOWN;
+}
+
+static bool glslang_parse_meta(const vector<string> &lines, glslang_meta *meta)
+{
+   *meta = glslang_meta{};
+   for (auto &line : lines)
+   {
+      if (line.find("#pragma name ") == 0)
+      {
+         if (!meta->name.empty())
+         {
+            RARCH_ERR("[slang]: Trying to declare multiple names for file.\n");
+            return false;
+         }
+
+         const char *str = line.c_str() + strlen("#pragma name ");
+         while (*str == ' ')
+            str++;
+         meta->name = str;
+      }
+      else if (line.find("#pragma format ") == 0)
+      {
+         if (meta->rt_format != SLANG_FORMAT_UNKNOWN)
+         {
+            RARCH_ERR("[slang]: Trying to declare format multiple times for file.\n");
+            return false;
+         }
+
+         const char *str = line.c_str() + strlen("#pragma format ");
+         while (*str == ' ')
+            str++;
+
+         meta->rt_format = glslang_find_format(str);
+         if (meta->rt_format == SLANG_FORMAT_UNKNOWN)
+         {
+            RARCH_ERR("[slang]: Failed to find format \"%s\".\n", str);
+            return false;
+         }
+      }
+   }
+   return true;
+}
+
 bool glslang_compile_shader(const char *shader_path, glslang_output *output)
 {
    vector<string> lines;
 
-   RARCH_LOG("Compiling shader \"%s\".\n", shader_path);
+   RARCH_LOG("[slang]: Compiling shader \"%s\".\n", shader_path);
    if (!read_shader_file(shader_path, &lines))
       return false;
 
+   if (!glslang_parse_meta(lines, &output->meta))
+      return false;
+
    auto &header = lines.front();
-   if (header.find_first_of("#version ") == string::npos)
+   if (header.find_first_of("#version ") != 0)
    {
       RARCH_ERR("First line of the shader must contain a valid #version string.\n");
       return false;
