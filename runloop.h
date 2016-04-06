@@ -30,6 +30,7 @@ enum runloop_ctl_state
    RUNLOOP_CTL_SET_FRAME_LIMIT,
    RUNLOOP_CTL_UNSET_FRAME_LIMIT,
    RUNLOOP_CTL_SHOULD_SET_FRAME_LIMIT,
+   RUNLOOP_CTL_FRAME_TIME_FREE,
    RUNLOOP_CTL_SET_FRAME_TIME_LAST,
    RUNLOOP_CTL_UNSET_FRAME_TIME_LAST,
    RUNLOOP_CTL_TASK_INIT,
@@ -117,11 +118,13 @@ enum runloop_ctl_state
    RUNLOOP_CTL_HAS_CORE_OPTIONS,
    RUNLOOP_CTL_GET_CORE_OPTION_SIZE,
    RUNLOOP_CTL_IS_CORE_OPTION_UPDATED,
+   RUNLOOP_CTL_COREOPTS_GET,
    RUNLOOP_CTL_CORE_OPTION_PREV,
    RUNLOOP_CTL_CORE_OPTION_NEXT,
    RUNLOOP_CTL_CORE_OPTIONS_GET,
    RUNLOOP_CTL_CORE_OPTIONS_INIT,
    RUNLOOP_CTL_CORE_OPTIONS_DEINIT,
+   RUNLOOP_CTL_CORE_OPTIONS_FREE,
    RUNLOOP_CTL_SHADER_DIR_DEINIT,
    RUNLOOP_CTL_SHADER_DIR_INIT,
    RUNLOOP_CTL_SYSTEM_INFO_GET,
@@ -183,16 +186,15 @@ typedef struct global
 
    struct
    {
-      bool input_descriptors;
       bool save_path;
       bool state_path;
+      bool verbosity;
+
       bool libretro_device[MAX_USERS];
       bool libretro;
       bool libretro_directory;
-      bool verbosity;
 
       bool netplay_mode;
-      bool username;
       bool netplay_ip_address;
       bool netplay_delay_frames;
       bool netplay_ip_port;

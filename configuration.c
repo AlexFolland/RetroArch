@@ -32,6 +32,7 @@
 #include "input/input_remapping.h"
 #include "defaults.h"
 #include "general.h"
+#include "libretro_version_1.h"
 #include "retroarch.h"
 #include "system.h"
 #include "verbosity.h"
@@ -1767,7 +1768,7 @@ static bool config_load_file(const char *path, bool set_defaults)
    config_get_path(conf, "joypad_autoconfig_dir",
          settings->input.autoconfig_dir, sizeof(settings->input.autoconfig_dir));
 
-   if (!global->has_set.username)
+   if (!rarch_ctl(RARCH_CTL_HAS_SET_USERNAME, NULL))
       config_get_path(conf, "netplay_nickname",  settings->username, sizeof(settings->username));
    CONFIG_GET_INT_BASE(conf, settings, user_language, "user_language");
 #ifdef HAVE_NETPLAY
@@ -2422,7 +2423,7 @@ void config_load(void)
       config_save_file(global->path.core_specific_config);
 
    /* Flush out some states that could have been set by core environment variables */
-   global->has_set.input_descriptors = false;
+   core_ctl(CORE_CTL_UNSET_INPUT_DESCRIPTORS, NULL);
 
    if (!rarch_ctl(RARCH_CTL_IS_BLOCK_CONFIG_READ, NULL))
    {

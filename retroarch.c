@@ -689,7 +689,9 @@ static void parse_input(int argc, char *argv[])
    global->has_set.verbosity             = false;
 
    global->has_set.netplay_mode          = false;
-   global->has_set.username              = false;
+
+   rarch_ctl(RARCH_CTL_USERNAME_UNSET, NULL);
+
    global->has_set.netplay_ip_address    = false;
    global->has_set.netplay_delay_frames  = false;
    global->has_set.netplay_ip_port       = false;
@@ -714,10 +716,7 @@ static void parse_input(int argc, char *argv[])
    for (;;)
    {
       int port;
-      int c = -1;
-       
-      if (argv != NULL)
-          c = getopt_long(argc, argv, optstring, opts, NULL);
+      int c = getopt_long(argc, argv, optstring, opts, NULL);
 
       if (c == -1)
          break;
@@ -948,7 +947,7 @@ static void parse_input(int argc, char *argv[])
 
 #endif
          case RA_OPT_NICK:
-            global->has_set.username = true;
+            rarch_ctl(RARCH_CTL_USERNAME_SET, NULL);
             strlcpy(settings->username, optarg,
                   sizeof(settings->username));
             break;
@@ -1023,10 +1022,19 @@ static void parse_input(int argc, char *argv[])
       }
    }
 
-   if (explicit_menu && current_core_type != CORE_TYPE_DUMMY)
+   if (explicit_menu)
    {
-      RARCH_ERR("--menu was used, but content file or libretro core was passed as well.\n");
-      retro_fail(1, "parse_input()");
+      if (optind < argc)
+      {
+         RARCH_ERR("--menu was used, but content file was passed as well.\n");
+         retro_fail(1, "parse_input()");
+      }
+      else
+      {
+         /* Allow stray -L arguments to go through to workaround cases where it's used as "config file".
+          * This seems to still be the case for Android, which should be properly fixed. */
+         current_core_type = CORE_TYPE_DUMMY;
+      }
    }
 
    if (!*global->subsystem && optind < argc)
@@ -1358,6 +1366,7 @@ static void rarch_main_deinit(void)
 
 bool rarch_ctl(enum rarch_ctl_state state, void *data)
 {
+   static bool has_set_username            = false;
    static bool rarch_is_inited             = false;
    static bool rarch_error_on_init         = false;
    static bool rarch_block_config_read     = false;
@@ -1385,6 +1394,14 @@ bool rarch_ctl(enum rarch_ctl_state state, void *data)
          return (current_core_type == CORE_TYPE_PLAIN);
       case RARCH_CTL_IS_DUMMY_CORE:
          return (current_core_type == CORE_TYPE_DUMMY);
+      case RARCH_CTL_USERNAME_SET:
+         has_set_username = true;
+         break;
+      case RARCH_CTL_USERNAME_UNSET:
+         has_set_username = false;
+         break;
+      case RARCH_CTL_HAS_SET_USERNAME:
+         return has_set_username;
       case RARCH_CTL_IS_INITED:
          return rarch_is_inited;
       case RARCH_CTL_UNSET_INITED:
@@ -1397,6 +1414,7 @@ bool rarch_ctl(enum rarch_ctl_state state, void *data)
          {
             int flags = DRIVERS_CMD_ALL;
 
+            has_set_username        = false;
             rarch_is_inited         = false;
             rarch_error_on_init     = false;
             rarch_block_config_read = false;

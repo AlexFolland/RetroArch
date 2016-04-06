@@ -331,11 +331,14 @@ enum
 
 - (void)applicationDidFinishLaunching:(UIApplication *)application
 {
-   apple_platform   = self;
+   char arguments[]   = "retroarch";
+   char       *argv[] = {arguments,   NULL};
+   int argc           = 1;
+   apple_platform     = self;
 
    [self setDelegate:self];
     
-   if (rarch_main(0, NULL, NULL))
+   if (rarch_main(argc, argv, NULL))
        apple_rarch_exited();
 
 #ifdef HAVE_AVFOUNDATION
@@ -358,7 +361,7 @@ enum
    [self supportOtherAudioSessions];
 #endif
 
-   if (rarch_main(0, NULL, NULL))
+   if (rarch_main(argc, argv, NULL))
       apple_rarch_exited();
 
   iterate_observer = CFRunLoopObserverCreate(0, kCFRunLoopBeforeWaiting,

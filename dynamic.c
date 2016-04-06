@@ -576,6 +576,7 @@ void uninit_libretro_sym(struct retro_core_t *current_core)
 
    runloop_ctl(RUNLOOP_CTL_CORE_OPTIONS_DEINIT, NULL);
    runloop_ctl(RUNLOOP_CTL_SYSTEM_INFO_FREE, NULL);
+   runloop_ctl(RUNLOOP_CTL_FRAME_TIME_FREE, NULL);
    camera_driver_ctl(RARCH_CAMERA_CTL_UNSET_ACTIVE, NULL);
    location_driver_ctl(RARCH_LOCATION_CTL_UNSET_ACTIVE, NULL);
 
@@ -873,7 +874,7 @@ bool rarch_environment_cb(unsigned cmd, void *data)
             }
          }
 
-         global->has_set.input_descriptors = true;
+         core_ctl(CORE_CTL_SET_INPUT_DESCRIPTORS, NULL);
 
          break;
       }
