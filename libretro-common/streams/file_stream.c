@@ -66,10 +66,6 @@
 #include <streams/file_stream.h>
 #include <memmap.h>
 
-#if 1
-#define HAVE_BUFFERED_IO 1
-#endif
-
 struct RFILE
 {
    unsigned hints;
@@ -78,6 +74,9 @@ struct RFILE
 #elif defined(__CELLOS_LV2__)
    int fd;
 #else
+
+#define HAVE_BUFFERED_IO 1
+
 #if defined(HAVE_BUFFERED_IO)
    FILE *fp;
 #endif
@@ -94,15 +93,11 @@ int filestream_get_fd(RFILE *stream)
 {
    if (!stream)
       return -1;
-#if defined(VITA) || defined(PSP) || defined(__CELLOS_LV2__)
-   return stream->fd;
-#else
 #if defined(HAVE_BUFFERED_IO)
    if ((stream->hints & RFILE_HINT_UNBUFFERED) == 0)
       return fileno(stream->fp);
 #endif
    return stream->fd;
-#endif
 }
 
 RFILE *filestream_open(const char *path, unsigned mode, ssize_t len)
@@ -245,27 +240,23 @@ error:
 
 ssize_t filestream_seek(RFILE *stream, ssize_t offset, int whence)
 {
-   int ret = 0;
    if (!stream)
       goto error;
 
-   (void)ret;
-
 #if defined(VITA) || defined(PSP)
-   ret = sceIoLseek(stream->fd, (SceOff)offset, whence);
-   if (ret == -1)
+   if (sceIoLseek(stream->fd, (SceOff)offset, whence) == -1)
       goto error;
-   return 0;
 #elif defined(__CELLOS_LV2__)
    uint64_t pos = 0;
    if (cellFsLseek(stream->fd, offset, whence, &pos) != CELL_FS_SUCCEEDED)
       goto error;
-   return 0;
 #else
+
 #if defined(HAVE_BUFFERED_IO)
    if ((stream->hints & RFILE_HINT_UNBUFFERED) == 0)
       return fseek(stream->fp, (long)offset, whence);
 #endif
+
 #ifdef HAVE_MMAP
    /* Need to check stream->mapped because this function is 
     * called in filestream_open() */
@@ -300,11 +291,13 @@ ssize_t filestream_seek(RFILE *stream, ssize_t offset, int whence)
       return stream->mappos;
    }
 #endif
-   ret = lseek(stream->fd, offset, whence);
-   if (ret < 0)
+
+   if (lseek(stream->fd, offset, whence) < 0)
       goto error;
-   return ret;
+
 #endif
+
+   return 0;
 
 error:
    return -1;
@@ -315,12 +308,12 @@ ssize_t filestream_tell(RFILE *stream)
    if (!stream)
       goto error;
 #if defined(VITA) || defined(PSP)
-   return sceIoLseek(stream->fd, 0, SEEK_CUR);
+  if (sceIoLseek(stream->fd, 0, SEEK_CUR) < 0)
+     goto error;
 #elif defined(__CELLOS_LV2__)
    uint64_t pos = 0;
    if (cellFsLseek(stream->fd, 0, CELL_FS_SEEK_CUR, &pos) != CELL_FS_SUCCEEDED)
       goto error;
-   return 0;
 #else
 #if defined(HAVE_BUFFERED_IO)
    if ((stream->hints & RFILE_HINT_UNBUFFERED) == 0)
@@ -332,8 +325,11 @@ ssize_t filestream_tell(RFILE *stream)
    if (stream->mapped && stream->hints & RFILE_HINT_MMAP)
       return stream->mappos;
 #endif
-   return lseek(stream->fd, 0, SEEK_CUR);
+   if (lseek(stream->fd, 0, SEEK_CUR) < 0)
+      goto error;
 #endif
+
+   return 0;
 
 error:
    return -1;
@@ -407,6 +403,19 @@ ssize_t filestream_write(RFILE *stream, const void *s, size_t len)
 
 error:
    return -1;
+}
+
+int filestream_putc(RFILE *stream, int c)
+{
+   if (!stream)
+      return EOF;
+
+#if defined(HAVE_BUFFERED_IO)
+   return fputc(c, stream->fp);
+#else
+   /* unimplemented */
+   return EOF;
+#endif
 }
 
 int filestream_close(RFILE *stream)
