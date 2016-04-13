@@ -123,7 +123,7 @@ typedef struct settings
       bool timedate_enable;
       bool core_enable;
       bool dynamic_wallpaper_enable;
-      bool boxart_enable;
+      unsigned thumbnails;
       bool throttle;
       char wallpaper[PATH_MAX_LENGTH];
 
@@ -167,6 +167,7 @@ typedef struct settings
       unsigned xmb_scale_factor;
       unsigned xmb_alpha_factor;
       unsigned xmb_theme;
+      bool xmb_shadows;
       char xmb_font[PATH_MAX_LENGTH];
       bool throttle_framerate;
       bool linear_filter;
@@ -370,7 +371,7 @@ typedef struct settings
    char core_assets_directory[PATH_MAX_LENGTH];
    char assets_directory[PATH_MAX_LENGTH];
    char dynamic_wallpapers_directory[PATH_MAX_LENGTH];
-   char boxarts_directory[PATH_MAX_LENGTH];
+   char thumbnails_directory[PATH_MAX_LENGTH];
    char menu_config_directory[PATH_MAX_LENGTH];
 #if defined(HAVE_MENU)
    char menu_content_directory[PATH_MAX_LENGTH];

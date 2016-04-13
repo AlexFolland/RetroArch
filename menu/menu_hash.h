@@ -388,6 +388,8 @@ extern "C" {
 #define MENU_LABEL_VALUE_XMB_FONT                                              0x0020337E7
 #define MENU_LABEL_XMB_THEME                                                   0x824c5a7eU
 #define MENU_LABEL_VALUE_XMB_THEME                                             0x3603f65fU
+#define MENU_LABEL_XMB_SHADOWS                                                 0xf9859e24U
+#define MENU_LABEL_VALUE_XMB_SHADOWS                                           0x7993b645U
 #define MENU_LABEL_VOLUME_UP                                                   0xa66e9681U
 #define MENU_LABEL_VOLUME_DOWN                                                 0xfc64f3d4U
 #define MENU_LABEL_LOG_VERBOSITY                                               0x6648c96dU
@@ -436,8 +438,8 @@ extern "C" {
 #define MENU_LABEL_VALUE_MENU_WALLPAPER                                        0x4555d2a2U
 #define MENU_LABEL_DYNAMIC_WALLPAPER                                           0xf011ccabU
 #define MENU_LABEL_VALUE_DYNAMIC_WALLPAPER                                     0x66928c32U
-#define MENU_LABEL_VALUE_BOXART                                                0x716441ebU
-#define MENU_LABEL_BOXART                                                      0xa269b0afU
+#define MENU_LABEL_THUMBNAILS                                                  0x0a3ec67cU
+#define MENU_LABEL_VALUE_THUMBNAILS                                            0x88eca25cU
 
 #define MENU_LABEL_FASTFORWARD_RATIO                                           0x3a0c2706U
 #define MENU_LABEL_VALUE_FASTFORWARD_RATIO                                     0x3c719749U
@@ -543,8 +545,8 @@ extern "C" {
 #define MENU_LABEL_VALUE_SAVESTATE_DIRECTORY                                   0xe6e0732aU
 #define MENU_LABEL_DYNAMIC_WALLPAPERS_DIRECTORY                                0x62f975b8U
 #define MENU_LABEL_VALUE_DYNAMIC_WALLPAPERS_DIRECTORY                          0x0a3a407aU
-#define MENU_LABEL_BOXARTS_DIRECTORY                                           0x9e2bdbddU
-#define MENU_LABEL_VALUE_BOXARTS_DIRECTORY                                     0x56a0b90aU
+#define MENU_LABEL_THUMBNAILS_DIRECTORY                                        0xdea77410U
+#define MENU_LABEL_VALUE_THUMBNAILS_DIRECTORY                                  0xcb99d0b1U
 
 #define MENU_LABEL_SLOWMOTION_RATIO                                            0x626b3ffeU
 #define MENU_LABEL_VALUE_SLOWMOTION_RATIO                                      0x81c6f8ecU

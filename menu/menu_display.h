@@ -116,7 +116,6 @@ typedef struct menu_display_ctx_draw
    float handle_alpha;
    bool force_transparency;
    float *color;
-   float *color2;
    const float *vertex;
    const float *tex_coord;
    size_t vertex_count;
@@ -173,6 +172,9 @@ bool menu_display_ctl(enum menu_display_ctl_state state, void *data);
 
 void menu_display_handle_wallpaper_upload(void *task_data,
       void *user_data, const char *err);
+
+uintptr_t menu_display_white_texture;
+void menu_display_allocate_white_texture();
 
 extern menu_display_ctx_driver_t menu_display_ctx_gl;
 extern menu_display_ctx_driver_t menu_display_ctx_vulkan;

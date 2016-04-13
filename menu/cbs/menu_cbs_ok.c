@@ -424,8 +424,7 @@ int generic_action_ok_displaylist_push(const char *path,
          info.list          = selection_buf;
          info_path          = menu_hash_to_str(MENU_LABEL_VALUE_CONTENT_SETTINGS);
          info_label         = menu_hash_to_str(MENU_LABEL_CONTENT_SETTINGS);
-         menu_entries_push(menu_stack,
-               info_path, info_label, 0, 0, 0);
+         menu_entries_add(menu_stack, info_path, info_label, 0, 0, 0);
          break;
    }
 
@@ -1670,7 +1669,7 @@ static int generic_action_ok_network(const char *path,
          break;
       case ACTION_OK_NETWORK_CORE_UPDATER_LIST:
          fill_pathname_join(url_path, settings->network.buildbot_url,
-               ".index", sizeof(url_path));
+               ".index-extended", sizeof(url_path));
          url_label = "cb_core_updater_list";
          type_id2  = ACTION_OK_DL_CORE_UPDATER_LIST;
          callback = cb_net_generic;

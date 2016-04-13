@@ -162,27 +162,17 @@ static void menu_display_gl_draw_bg(void *data)
    coords.lut_tex_coord = new_tex_coord;
    coords.color         = (const float*)draw->color;
 
-   menu_display_gl_blend_begin();
-
-   menu_display_ctl(MENU_DISPLAY_CTL_SET_VIEWPORT, NULL);
-
-   if (
-         (settings->menu.pause_libretro
-          || !rarch_ctl(RARCH_CTL_IS_INITED, NULL) 
-          || rarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL)
-         )
-      && !draw->force_transparency && draw->texture)
-      coords.color = (const float*)draw->color2;
-
    draw->x           = 0;
    draw->y           = 0;
    draw->coords      = &coords;
+
+   if (!draw->texture)
+      draw->texture     = menu_display_white_texture;
+
    draw->matrix_data = (math_matrix_4x4*)
       menu_display_gl_get_default_mvp();
 
    menu_display_gl_draw(draw);
-
-   menu_display_gl_blend_end();
 
    gl->coords.color = gl->white_color_ptr;
 }

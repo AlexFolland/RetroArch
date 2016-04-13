@@ -211,11 +211,48 @@ static const char *stock_fragment_core_blend =
    "   FragColor = color * texture(Texture, tex_coord);\n"
    "}";
 
+static const char *stock_vertex_xmb =
+   "attribute vec3 vPosition;\n"
+   "uniform float time;\n"
+   "varying vec3 v;\n"
+   "float iqhash( float n )\n"
+   "{\n"
+   "  return fract(sin(n)*43758.5453);\n"
+   "}\n"
+   "float noise( vec3 x )\n"
+   "{\n"
+   "  vec3 p = floor(x);\n"
+   "  vec3 f = fract(x);\n"
+   "  f = f*f*(3.0-2.0*f);\n"
+   "  float n = p.x + p.y*57.0 + 113.0*p.z;\n"
+   "  return mix(mix(mix( iqhash(n+0.0 ), iqhash(n+1.0 ),f.x),\n"
+   "  mix( iqhash(n+57.0 ), iqhash(n+58.0 ),f.x),f.y),\n"
+   "  mix(mix( iqhash(n+113.0), iqhash(n+114.0),f.x),\n"
+   "  mix( iqhash(n+170.0), iqhash(n+171.0),f.x),f.y),f.z);\n"
+   "}\n"
+   "void main()\n"
+   "{\n"
+   "  v = vPosition;\n"
+   "  vec3 v2 = v;\n"
+   "  v2.x = v2.x + time/2.0;\n"
+   "  v2.z = v.z * 3.0;\n"
+   "  v.y = -cos((v.x+v.z/3.0+time)*2.0)/10.0 - noise(v2.xyz)/4.0;\n"
+   "  gl_Position = vec4(v, 1.0);\n"
+   "}\n";
+
+static const char *stock_fragment_xmb =
+   "uniform float time;\n"
+   "varying vec3 v;\n"
+   "void main()\n"
+   "{\n"
+   "  gl_FragColor = vec4(1.0, 1.0, 1.0, 0.05);\n"
+   "}\n";
+
 typedef struct glsl_shader_data
 {
    struct video_shader *shader;
-   struct shader_uniforms gl_uniforms[GFX_MAX_SHADERS];
-   struct cache_vbo glsl_vbo[GFX_MAX_SHADERS];
+   struct shader_uniforms uniforms[GFX_MAX_SHADERS];
+   struct cache_vbo vbo[GFX_MAX_SHADERS];
    char glsl_alias_define[1024];
    unsigned glsl_active_index;
    unsigned gl_attrib_index;
@@ -382,51 +419,53 @@ static bool gl_glsl_link_program(GLuint prog)
    return true;
 }
 
-static GLuint gl_glsl_compile_program(glsl_shader_data_t *glsl,
-      const char *vertex,
-      const char *fragment, unsigned i)
+static GLuint gl_glsl_compile_program(
+      void *data,
+      unsigned idx,
+      struct shader_program_info *program_info)
 {
-   GLuint vert = 0, frag = 0, prog = glCreateProgram();
-   if (!prog)
-      return 0;
+   GLuint vert = 0;
+   GLuint frag = 0;
+   glsl_shader_data_t *glsl = (glsl_shader_data_t*)data;
+   GLuint prog = glCreateProgram();
 
-   if (vertex)
+   if (!prog)
+      goto error;
+
+   if (program_info->vertex)
    {
       RARCH_LOG("Found GLSL vertex shader.\n");
       vert = glCreateShader(GL_VERTEX_SHADER);
       if (!gl_glsl_compile_shader(
                glsl,
-               vert, "#define VERTEX\n#define PARAMETER_UNIFORM\n", vertex))
+               vert, "#define VERTEX\n#define PARAMETER_UNIFORM\n", program_info->vertex))
       {
-         RARCH_ERR("Failed to compile vertex shader #%u\n", i);
-         return 0;
+         RARCH_ERR("Failed to compile vertex shader #%u\n", idx);
+         goto error;
       }
 
       glAttachShader(prog, vert);
    }
 
-   if (fragment)
+   if (program_info->fragment)
    {
       RARCH_LOG("Found GLSL fragment shader.\n");
       frag = glCreateShader(GL_FRAGMENT_SHADER);
       if (!gl_glsl_compile_shader(glsl, frag,
-               "#define FRAGMENT\n#define PARAMETER_UNIFORM\n", fragment))
+               "#define FRAGMENT\n#define PARAMETER_UNIFORM\n", program_info->fragment))
       {
-         RARCH_ERR("Failed to compile fragment shader #%u\n", i);
-         return 0;
+         RARCH_ERR("Failed to compile fragment shader #%u\n", idx);
+         goto error;
       }
 
       glAttachShader(prog, frag);
    }
 
-   if (vertex || fragment)
+   if (program_info->vertex || program_info->fragment)
    {
       RARCH_LOG("Linking GLSL program.\n");
       if (!gl_glsl_link_program(prog))
-      {
-         RARCH_ERR("Failed to link program #%u.\n", i);
-         return 0;
-      }
+         goto error;
 
       /* Clean up dead memory. We're not going to relink the program.
        * Detaching first seems to kill some mobile drivers 
@@ -442,6 +481,10 @@ static GLuint gl_glsl_compile_program(glsl_shader_data_t *glsl,
    }
 
    return prog;
+
+error:
+   RARCH_ERR("Failed to link program #%u.\n", idx);
+   return 0;
 }
 
 static void gl_glsl_strip_parameter_pragmas(char *source)
@@ -481,6 +524,7 @@ static bool gl_glsl_compile_programs(
 
    for (i = 0; i < glsl->shader->passes; i++)
    {
+      struct shader_program_info shader_prog_info;
       const char *vertex           = NULL;
       const char *fragment         = NULL;
       struct video_shader_pass *pass = (struct video_shader_pass*)
@@ -502,7 +546,11 @@ static bool gl_glsl_compile_programs(
       vertex   = pass->source.string.vertex;
       fragment = pass->source.string.fragment;
 
-      gl_prog[i] = gl_glsl_compile_program(glsl, vertex, fragment, i);
+      shader_prog_info.vertex   = vertex;
+      shader_prog_info.fragment = fragment;
+      shader_prog_info.is_file  = false;
+
+      gl_prog[i] = gl_glsl_compile_program(glsl, i, &shader_prog_info);
 
       if (!gl_prog[i])
       {
@@ -709,7 +757,7 @@ static void gl_glsl_destroy_resources(glsl_shader_data_t *glsl)
       glDeleteTextures(glsl->shader->luts, glsl->gl_teximage);
 
    memset(glsl->gl_program, 0, sizeof(glsl->gl_program));
-   memset(glsl->gl_uniforms, 0, sizeof(glsl->gl_uniforms));
+   memset(glsl->uniforms, 0, sizeof(glsl->uniforms));
    glsl->glsl_active_index = 0;
 
    gl_glsl_deinit_shader(glsl);
@@ -722,15 +770,15 @@ static void gl_glsl_destroy_resources(glsl_shader_data_t *glsl)
 
    for (i = 0; i < GFX_MAX_SHADERS; i++)
    {
-      if (glsl->glsl_vbo[i].vbo_primary)
-         glDeleteBuffers(1, &glsl->glsl_vbo[i].vbo_primary);
-      if (glsl->glsl_vbo[i].vbo_secondary)
-         glDeleteBuffers(1, &glsl->glsl_vbo[i].vbo_secondary);
+      if (glsl->vbo[i].vbo_primary)
+         glDeleteBuffers(1, &glsl->vbo[i].vbo_primary);
+      if (glsl->vbo[i].vbo_secondary)
+         glDeleteBuffers(1, &glsl->vbo[i].vbo_secondary);
 
-      free(glsl->glsl_vbo[i].buffer_primary);
-      free(glsl->glsl_vbo[i].buffer_secondary);
+      free(glsl->vbo[i].buffer_primary);
+      free(glsl->vbo[i].buffer_secondary);
    }
-   memset(&glsl->glsl_vbo, 0, sizeof(glsl->glsl_vbo));
+   memset(&glsl->vbo, 0, sizeof(glsl->vbo));
 }
 
 static void gl_glsl_deinit(void *data)
@@ -748,6 +796,7 @@ static void gl_glsl_deinit(void *data)
 static void *gl_glsl_init(void *data, const char *path)
 {
    unsigned i;
+   struct shader_program_info shader_prog_info;
    config_file_t *conf        = NULL;
    const char *stock_vertex   = NULL;
    const char *stock_fragment = NULL;
@@ -876,7 +925,11 @@ static void *gl_glsl_init(void *data, const char *path)
       }
    }
 
-   if (!(glsl->gl_program[0] = gl_glsl_compile_program(glsl, stock_vertex, stock_fragment, 0)))
+   shader_prog_info.vertex   = stock_vertex;
+   shader_prog_info.fragment = stock_fragment;
+   shader_prog_info.is_file  = false;
+
+   if (!(glsl->gl_program[0] = gl_glsl_compile_program(glsl, 0, &shader_prog_info)))
    {
       RARCH_ERR("GLSL stock programs failed to compile.\n");
       goto error;
@@ -892,7 +945,7 @@ static void *gl_glsl_init(void *data, const char *path)
    }
 
    for (i = 0; i <= glsl->shader->passes; i++)
-      gl_glsl_find_uniforms(glsl, i, glsl->gl_program[i], &glsl->gl_uniforms[i]);
+      gl_glsl_find_uniforms(glsl, i, glsl->gl_program[i], &glsl->uniforms[i]);
 
 #ifdef GLSL_DEBUG
    if (!gl_check_error())
@@ -924,32 +977,47 @@ static void *gl_glsl_init(void *data, const char *path)
    }
    
    glsl->gl_program[glsl->shader->passes  + 1] = glsl->gl_program[0];
-   glsl->gl_uniforms[glsl->shader->passes + 1] = glsl->gl_uniforms[0];
+   glsl->uniforms[glsl->shader->passes + 1] = glsl->uniforms[0];
 
    if (glsl->shader->modern)
    {
+      shader_prog_info.vertex   = 
+            glsl_core ? 
+            stock_vertex_core_blend : stock_vertex_modern_blend;
+      shader_prog_info.fragment = 
+            glsl_core ? 
+            stock_fragment_core_blend : stock_fragment_modern_blend;
+      shader_prog_info.is_file  = false;
+
       glsl->gl_program[GL_SHADER_STOCK_BLEND] = gl_glsl_compile_program(
             glsl,
-            glsl_core ? 
-            stock_vertex_core_blend : stock_vertex_modern_blend,
-            glsl_core ? 
-            stock_fragment_core_blend : stock_fragment_modern_blend,
-            GL_SHADER_STOCK_BLEND);
+            GL_SHADER_STOCK_BLEND,
+            &shader_prog_info
+            );
       gl_glsl_find_uniforms(glsl, 0, glsl->gl_program[GL_SHADER_STOCK_BLEND],
-            &glsl->gl_uniforms[GL_SHADER_STOCK_BLEND]);
+            &glsl->uniforms[GL_SHADER_STOCK_BLEND]);
    }
    else
    {
       glsl->gl_program [GL_SHADER_STOCK_BLEND] = glsl->gl_program[0];
-      glsl->gl_uniforms[GL_SHADER_STOCK_BLEND] = glsl->gl_uniforms[0];
+      glsl->uniforms[GL_SHADER_STOCK_BLEND] = glsl->uniforms[0];
    }
+
+   shader_prog_info.vertex   = stock_vertex_xmb;
+   shader_prog_info.fragment = stock_fragment_xmb;
+   shader_prog_info.is_file  = false;
+
+   glsl->gl_program[GL_SHADER_STOCK_XMB] = gl_glsl_compile_program(
+         glsl,
+         GL_SHADER_STOCK_XMB,
+         &shader_prog_info);
 
    gl_glsl_reset_attrib(glsl);
 
    for (i = 0; i < GFX_MAX_SHADERS; i++)
    {
-      glGenBuffers(1, &glsl->glsl_vbo[i].vbo_primary);
-      glGenBuffers(1, &glsl->glsl_vbo[i].vbo_secondary);
+      glGenBuffers(1, &glsl->vbo[i].vbo_primary);
+      glGenBuffers(1, &glsl->vbo[i].vbo_secondary);
    }
 
    return glsl;
@@ -963,6 +1031,53 @@ error:
    return NULL;
 }
 
+#if 0
+static float t = 0;
+
+#endif
+static void glsl_uniform_set_parameter(void *data, void *uniform_data)
+{
+   struct uniform_info *param = (struct uniform_info*)data;
+
+   if (!param)
+      return;
+
+   switch (param->type)
+   {
+      case UNIFORM_1F:
+         glUniform1f(param->location, param->result.f.v0);
+         break;
+      case UNIFORM_2F:
+         glUniform2f(param->location, param->result.f.v0,
+               param->result.f.v1);
+         break;
+      case UNIFORM_3F:
+         glUniform3f(param->location, param->result.f.v0,
+               param->result.f.v1, param->result.f.v2);
+         break;
+      case UNIFORM_4F:
+         glUniform4f(param->location, param->result.f.v0,
+               param->result.f.v1, param->result.f.v2,
+               param->result.f.v3);
+         break;
+      case UNIFORM_1FV:
+         glUniform1fv(param->location, 1, param->result.floatv);
+         break;
+      case UNIFORM_2FV:
+         glUniform2fv(param->location, 1, param->result.floatv);
+         break;
+      case UNIFORM_3FV:
+         glUniform3fv(param->location, 1, param->result.floatv);
+         break;
+      case UNIFORM_4FV:
+         glUniform4fv(param->location, 1, param->result.floatv);
+         break;
+      case UNIFORM_1I:
+         glUniform1i(param->location, param->result.integer.v0);
+         break;
+   }
+}
+
 static void gl_glsl_set_params(void *data, void *shader_data,
       unsigned width, unsigned height, 
       unsigned tex_width, unsigned tex_height, 
@@ -973,10 +1088,13 @@ static void gl_glsl_set_params(void *data, void *shader_data,
       const void *_feedback_info,
       const void *_fbo_info, unsigned fbo_info_cnt)
 {
+   unsigned i;
+   struct uniform_info uniform_params[10];
    GLfloat buffer[512];
    struct glsl_attrib attribs[32];
    float input_size[2], output_size[2], texture_size[2];
-   unsigned i, texunit = 1;
+   unsigned uniform_count = 0;
+   unsigned texunit = 1;
    const struct shader_uniforms *uni = NULL;
    size_t size = 0, attribs_size = 0;
    const struct gfx_tex_info *info = (const struct gfx_tex_info*)_info;
@@ -989,12 +1107,20 @@ static void gl_glsl_set_params(void *data, void *shader_data,
    if (!glsl)
       return;
 
-   uni = (const struct shader_uniforms*)&glsl->gl_uniforms[glsl->glsl_active_index];
+   uni = (const struct shader_uniforms*)&glsl->uniforms[glsl->glsl_active_index];
 
    (void)data;
 
    if (glsl->gl_program[glsl->glsl_active_index] == 0)
       return;
+
+#if 0
+   t += 0.004;
+   glUseProgram(glsl->gl_program[GL_SHADER_STOCK_XMB]);
+   int location = glGetUniformLocation(glsl->gl_program[GL_SHADER_STOCK_XMB], "time");
+   glUniform1f(location, t);
+   glUseProgram(0);
+#endif
 
    input_size [0]  = (float)width;
    input_size [1]  = (float)height;
@@ -1003,63 +1129,125 @@ static void gl_glsl_set_params(void *data, void *shader_data,
    texture_size[0] = (float)tex_width;
    texture_size[1] = (float)tex_height;
 
+   uniform_params[0].enabled       = false;
+   uniform_params[0].location      = uni->input_size;
+   uniform_params[0].type          = UNIFORM_2FV;
+   uniform_params[0].result.floatv = input_size;
+
    if (uni->input_size >= 0)
-      glUniform2fv(uni->input_size, 1, input_size);
+      uniform_params[0].enabled       = true;
+
+   uniform_params[1].enabled       = false;
+   uniform_params[1].location      = uni->output_size;
+   uniform_params[1].type          = UNIFORM_2FV;
+   uniform_params[1].result.floatv = output_size;
 
    if (uni->output_size >= 0)
-      glUniform2fv(uni->output_size, 1, output_size);
+      uniform_params[1].enabled       = true;
+
+   uniform_params[2].enabled       = false;
+   uniform_params[2].location      = uni->texture_size;
+   uniform_params[2].type          = UNIFORM_2FV;
+   uniform_params[2].result.floatv = texture_size;
 
    if (uni->texture_size >= 0)
-      glUniform2fv(uni->texture_size, 1, texture_size);
+      uniform_params[2].enabled       = true;
 
+   uniform_count += 3;
+   
    if (uni->frame_count >= 0 && glsl->glsl_active_index)
    {
       unsigned modulo = glsl->shader->pass[glsl->glsl_active_index - 1].frame_count_mod;
 
       if (modulo)
          frame_count %= modulo;
-      glUniform1i(uni->frame_count, frame_count);
+
+      uniform_params[uniform_count].enabled  = true;
+      uniform_params[uniform_count].location = uni->frame_count;
+      uniform_params[uniform_count].type     = UNIFORM_1I;
+      uniform_params[uniform_count].result.integer.v0 = frame_count;
+
+      uniform_count++;
    }
 
-   if (uni->frame_direction >= 0)
-      glUniform1i(uni->frame_direction, state_manager_frame_is_reversed() ? -1 : 1);
+   uniform_params[uniform_count].enabled  = true;
+   uniform_params[uniform_count].location = uni->frame_direction;
+   uniform_params[uniform_count].type     = UNIFORM_1I;
+   uniform_params[uniform_count].result.integer.v0 = 
+      state_manager_frame_is_reversed() ? -1 : 1;
+   uniform_count++;
 
+   for (i = 0; i < uniform_count; i++)
+      glsl_uniform_set_parameter(&uniform_params[i], NULL);
 
+   /* Set lookup textures. */
    for (i = 0; i < glsl->shader->luts; i++)
    {
+      struct uniform_info lut_uniform;
       if (uni->lut_texture[i] < 0)
          continue;
 
       /* Have to rebind as HW render could override this. */
       glActiveTexture(GL_TEXTURE0 + texunit);
       glBindTexture(GL_TEXTURE_2D, glsl->gl_teximage[i]);
-      glUniform1i(uni->lut_texture[i], texunit);
+
+      lut_uniform.enabled           = true;
+      lut_uniform.location          = uni->lut_texture[i];
+      lut_uniform.type              = UNIFORM_1I;
+      lut_uniform.result.integer.v0 = texunit;
+
+      glsl_uniform_set_parameter(&lut_uniform, NULL);
       texunit++;
    }
 
    if (glsl->glsl_active_index)
    {
+      unsigned j;
+      struct uniform_info orig_uniforms[2];
+      struct uniform_info feedback_uniforms[2];
+
       /* Set original texture. */
       if (uni->orig.texture >= 0)
       {
+         struct uniform_info orig_tex_uniform;
          /* Bind original texture. */
          glActiveTexture(GL_TEXTURE0 + texunit);
-         glUniform1i(uni->orig.texture, texunit);
+
+         orig_tex_uniform.enabled           = true;
+         orig_tex_uniform.location          = uni->orig.texture;
+         orig_tex_uniform.type              = UNIFORM_1I;
+         orig_tex_uniform.result.integer.v0 = texunit;
+
+         glsl_uniform_set_parameter(&orig_tex_uniform, NULL);
+
          glBindTexture(GL_TEXTURE_2D, info->tex);
          texunit++;
       }
 
+      orig_uniforms[0].enabled           = false;
+      orig_uniforms[0].location          = uni->orig.texture_size;
+      orig_uniforms[0].type              = UNIFORM_2FV;
+      orig_uniforms[0].result.floatv     = (float*)info->tex_size;
+
       if (uni->orig.texture_size >= 0)
-         glUniform2fv(uni->orig.texture_size, 1, info->tex_size);
+         orig_uniforms[0].enabled        = true;
+
+      orig_uniforms[1].enabled           = false;
+      orig_uniforms[1].location          = uni->orig.input_size;
+      orig_uniforms[1].type              = UNIFORM_2FV;
+      orig_uniforms[1].result.floatv     = (float*)info->input_size;
 
       if (uni->orig.input_size >= 0)
-         glUniform2fv(uni->orig.input_size, 1, info->input_size);
+         orig_uniforms[1].enabled        = true;
+
+      for (j = 0; j < 2; j++)
+         glsl_uniform_set_parameter(&orig_uniforms[i], NULL);
 
       /* Pass texture coordinates. */
       if (uni->orig.tex_coord >= 0)
       {
-         attr->loc = uni->orig.tex_coord;
-         attr->size = 2;
+         attr->loc    = uni->orig.tex_coord;
+         attr->size   = 2;
          attr->offset = size * sizeof(GLfloat);
          attribs_size++;
          attr++;
@@ -1071,24 +1259,46 @@ static void gl_glsl_set_params(void *data, void *shader_data,
       /* Set feedback texture. */
       if (uni->feedback.texture >= 0)
       {
+         struct uniform_info feedback_texture_param;
+
          /* Bind original texture. */
          glActiveTexture(GL_TEXTURE0 + texunit);
-         glUniform1i(uni->feedback.texture, texunit);
+
+         feedback_texture_param.enabled  = true;
+         feedback_texture_param.location = uni->pass[i].texture;
+         feedback_texture_param.type     = UNIFORM_1I;
+         feedback_texture_param.result.integer.v0 = texunit;
+
+         glsl_uniform_set_parameter(&feedback_texture_param, NULL);
+
          glBindTexture(GL_TEXTURE_2D, feedback_info->tex);
          texunit++;
       }
 
+      feedback_uniforms[0].enabled           = false;
+      feedback_uniforms[0].location          = uni->feedback.texture_size;
+      feedback_uniforms[0].type              = UNIFORM_2FV;
+      feedback_uniforms[0].result.floatv     = (float*)feedback_info->tex_size;
+
       if (uni->feedback.texture_size >= 0)
-         glUniform2fv(uni->feedback.texture_size, 1, feedback_info->tex_size);
+         feedback_uniforms[0].enabled        = true;
+
+      feedback_uniforms[1].enabled           = false;
+      feedback_uniforms[1].location          = uni->feedback.input_size;
+      feedback_uniforms[1].type              = UNIFORM_2FV;
+      feedback_uniforms[1].result.floatv     = (float*)feedback_info->input_size;
 
       if (uni->feedback.input_size >= 0)
-         glUniform2fv(uni->feedback.input_size, 1, feedback_info->input_size);
+         feedback_uniforms[1].enabled        = true;
+
+      for (j = 0; j < 2; j++)
+         glsl_uniform_set_parameter(&feedback_uniforms[i], NULL);
 
       /* Pass texture coordinates. */
       if (uni->feedback.tex_coord >= 0)
       {
-         attr->loc = uni->feedback.tex_coord;
-         attr->size = 2;
+         attr->loc    = uni->feedback.tex_coord;
+         attr->size   = 2;
          attr->offset = size * sizeof(GLfloat);
          attribs_size++;
          attr++;
@@ -1100,24 +1310,45 @@ static void gl_glsl_set_params(void *data, void *shader_data,
       /* Bind FBO textures. */
       for (i = 0; i < fbo_info_cnt; i++)
       {
+         unsigned j;
+         struct uniform_info fbo_tex_params[3];
+
          if (uni->pass[i].texture)
          {
             glActiveTexture(GL_TEXTURE0 + texunit);
             glBindTexture(GL_TEXTURE_2D, fbo_info[i].tex);
-            glUniform1i(uni->pass[i].texture, texunit);
+
+            fbo_tex_params[0].enabled  = true;
+            fbo_tex_params[0].location = uni->pass[i].texture;
+            fbo_tex_params[0].type     = UNIFORM_1I;
+            fbo_tex_params[0].result.integer.v0 = texunit;
+
             texunit++;
          }
 
+         fbo_tex_params[1].enabled  = false;
+         fbo_tex_params[1].location = uni->pass[i].texture_size;
+         fbo_tex_params[1].type     = UNIFORM_2FV;
+         fbo_tex_params[1].result.floatv = (float*)fbo_info[i].tex_size;
+
          if (uni->pass[i].texture_size >= 0)
-            glUniform2fv(uni->pass[i].texture_size, 1, fbo_info[i].tex_size);
+            fbo_tex_params[1].enabled  = true;
+
+         fbo_tex_params[2].enabled  = false;
+         fbo_tex_params[2].location = uni->pass[i].input_size;
+         fbo_tex_params[2].type     = UNIFORM_2FV;
+         fbo_tex_params[2].result.floatv = (float*)fbo_info[i].input_size;
 
          if (uni->pass[i].input_size >= 0)
-            glUniform2fv(uni->pass[i].input_size, 1, fbo_info[i].input_size);
+            fbo_tex_params[2].enabled  = true;
+
+         for (j = 0; j < 3; j++)
+            glsl_uniform_set_parameter(&fbo_tex_params[i], NULL);
 
          if (uni->pass[i].tex_coord >= 0)
          {
-            attr->loc = uni->pass[i].tex_coord;
-            attr->size = 2;
+            attr->loc    = uni->pass[i].tex_coord;
+            attr->size   = 2;
             attr->offset = size * sizeof(GLfloat);
             attribs_size++;
             attr++;
@@ -1131,25 +1362,46 @@ static void gl_glsl_set_params(void *data, void *shader_data,
    /* Set previous textures. Only bind if they're actually used. */
    for (i = 0; i < PREV_TEXTURES; i++)
    {
+      unsigned j;
+      struct uniform_info prev_tex_params[3];
+
       if (uni->prev[i].texture >= 0)
       {
          glActiveTexture(GL_TEXTURE0 + texunit);
          glBindTexture(GL_TEXTURE_2D, prev_info[i].tex);
-         glUniform1i(uni->prev[i].texture, texunit);
+
+         prev_tex_params[0].enabled  = true;
+         prev_tex_params[0].location = uni->prev[i].texture;
+         prev_tex_params[0].type     = UNIFORM_1I;
+         prev_tex_params[0].result.integer.v0 = texunit;
+
          texunit++;
       }
 
+      prev_tex_params[1].enabled  = false;
+      prev_tex_params[1].location = uni->prev[i].texture_size;
+      prev_tex_params[1].type     = UNIFORM_2FV;
+      prev_tex_params[1].result.floatv = (float*)prev_info[i].tex_size;
+
       if (uni->prev[i].texture_size >= 0)
-         glUniform2fv(uni->prev[i].texture_size, 1, prev_info[i].tex_size);
+         prev_tex_params[1].enabled  = true;
+
+      prev_tex_params[2].enabled  = false;
+      prev_tex_params[2].location = uni->prev[i].input_size;
+      prev_tex_params[2].type     = UNIFORM_2FV;
+      prev_tex_params[2].result.floatv = (float*)prev_info[i].input_size;
 
       if (uni->prev[i].input_size >= 0)
-         glUniform2fv(uni->prev[i].input_size, 1, prev_info[i].input_size);
+         prev_tex_params[2].enabled  = true;
+
+      for (j = 0; j < 3; j++)
+         glsl_uniform_set_parameter(&prev_tex_params[i], NULL);
 
       /* Pass texture coordinates. */
       if (uni->prev[i].tex_coord >= 0)
       {
-         attr->loc = uni->prev[i].tex_coord;
-         attr->size = 2;
+         attr->loc    = uni->prev[i].tex_coord;
+         attr->size   = 2;
          attr->offset = size * sizeof(GLfloat);
          attribs_size++;
          attr++;
@@ -1160,22 +1412,27 @@ static void gl_glsl_set_params(void *data, void *shader_data,
    }
 
    if (size)
-   {
-      gl_glsl_set_attribs(glsl, glsl->glsl_vbo[glsl->glsl_active_index].vbo_secondary,
-            &glsl->glsl_vbo[glsl->glsl_active_index].buffer_secondary,
-            &glsl->glsl_vbo[glsl->glsl_active_index].size_secondary,
+      gl_glsl_set_attribs(glsl, glsl->vbo[glsl->glsl_active_index].vbo_secondary,
+            &glsl->vbo[glsl->glsl_active_index].buffer_secondary,
+            &glsl->vbo[glsl->glsl_active_index].size_secondary,
             buffer, size, attribs, attribs_size);
-   }
 
    glActiveTexture(GL_TEXTURE0);
 
    /* #pragma parameters. */
    for (i = 0; i < glsl->shader->num_parameters; i++)
    {
+      struct uniform_info pragma_param;
       int location = glGetUniformLocation(
             glsl->gl_program[glsl->glsl_active_index],
             glsl->shader->parameters[i].id);
-      glUniform1f(location, glsl->shader->parameters[i].current);
+
+      pragma_param.enabled     = true;
+      pragma_param.location    = location;
+      pragma_param.type        = UNIFORM_1F;
+      pragma_param.result.f.v0 = glsl->shader->parameters[i].current;
+
+      glsl_uniform_set_parameter(&pragma_param, NULL);
    }
 
    /* Set state parameters. */
@@ -1190,10 +1447,17 @@ static void gl_glsl_set_params(void *data, void *shader_data,
 
       for (i = 0; i < cnt; i++)
       {
+         struct uniform_info state_param;
          int location = glGetUniformLocation(
                glsl->gl_program[glsl->glsl_active_index],
                state_info[i].id);
-         glUniform1f(location, state_info[i].value);
+
+         state_param.enabled     = true;
+         state_param.location    = location;
+         state_param.type        = UNIFORM_1F;
+         state_param.result.f.v0 = state_info[i].value;
+
+         glsl_uniform_set_parameter(&state_param, NULL);
       }
    }
 }
@@ -1211,7 +1475,7 @@ static bool gl_glsl_set_mvp(void *data, void *shader_data, const math_matrix_4x4
       return false;
    }
 
-   loc = glsl->gl_uniforms[glsl->glsl_active_index].mvp;
+   loc = glsl->uniforms[glsl->glsl_active_index].mvp;
    if (loc >= 0)
       glUniformMatrix4fv(loc, 1, GL_FALSE, mat->data);
 
@@ -1248,7 +1512,7 @@ static bool gl_glsl_set_coords(void *handle_data, void *shader_data, const void 
    }
 
    attr = attribs;
-   uni  = &glsl->gl_uniforms[glsl->glsl_active_index];
+   uni  = &glsl->uniforms[glsl->glsl_active_index];
 
    if (uni->tex_coord >= 0)
    {
@@ -1303,14 +1567,12 @@ static bool gl_glsl_set_coords(void *handle_data, void *shader_data, const void 
    }
 
    if (size)
-   {
       gl_glsl_set_attribs(glsl,
-            glsl->glsl_vbo[glsl->glsl_active_index].vbo_primary,
-            &glsl->glsl_vbo[glsl->glsl_active_index].buffer_primary,
-            &glsl->glsl_vbo[glsl->glsl_active_index].size_primary,
+            glsl->vbo[glsl->glsl_active_index].vbo_primary,
+            &glsl->vbo[glsl->glsl_active_index].buffer_primary,
+            &glsl->vbo[glsl->glsl_active_index].size_primary,
             buffer, size,
             attribs, attribs_size);
-   }
 
    if (buffer != short_buffer)
       free(buffer);
@@ -1382,7 +1644,7 @@ static unsigned gl_glsl_get_prev_textures(void *data)
 
    for (i = 1; i <= glsl->shader->passes; i++)
       for (j = 0; j < PREV_TEXTURES; j++)
-         if (glsl->gl_uniforms[i].prev[j].texture >= 0)
+         if (glsl->uniforms[i].prev[j].texture >= 0)
             max_prev = MAX(j + 1, max_prev);
 
    return max_prev;

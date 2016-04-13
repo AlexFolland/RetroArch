@@ -75,10 +75,10 @@ enum netplay_cmd
 
    /* Controlling game playback */
 
-   /* Pauses the game, takes no args  */
+   /* Pauses the game, takes no arguments  */
    NETPLAY_CMD_PAUSE          = 0x0030, 
 
-   /* Resumes the game, takes no args */
+   /* Resumes the game, takes no arguments */
    NETPLAY_CMD_RESUME         = 0x0031  
 };
 
@@ -142,14 +142,6 @@ netplay_t *netplay_new(const char *server,
  * Frees netplay handle.
  **/
 void netplay_free(netplay_t *handle);
-
-/**
- * netplay_flip_users:
- * @netplay              : pointer to netplay object
- *
- * On regular netplay, flip who controls user 1 and 2.
- **/
-void netplay_flip_users(netplay_t *handle);
 
 /**
  * netplay_pre_frame:   

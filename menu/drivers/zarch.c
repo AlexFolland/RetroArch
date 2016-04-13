@@ -43,6 +43,7 @@
 #include "../menu_display.h"
 #include "../menu_navigation.h"
 #include "../menu_hash.h"
+#include "../../retroarch.h"
 
 #include "../../gfx/font_driver.h"
 
@@ -1102,13 +1103,22 @@ static void zarch_frame(void *data)
    draw.handle_alpha       = 0.75f;
    draw.force_transparency = false;
    draw.color              = &coord_color[0];
-   draw.color2             = &coord_color2[0];
    draw.vertex             = NULL;
    draw.tex_coord          = coord_draw.ptr;
    draw.vertex_count       = 4;
    draw.prim_type          = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
 
+   if (
+         (settings->menu.pause_libretro
+          || !rarch_ctl(RARCH_CTL_IS_INITED, NULL) 
+          || rarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL)
+         )
+      && !draw.force_transparency && draw.texture)
+      draw.color             = &coord_color2[0];
+
+   menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
    menu_display_ctl(MENU_DISPLAY_CTL_DRAW_BG, &draw);
+   menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
 
    zui->rendering = false;
 
@@ -1218,7 +1228,7 @@ static bool zarch_load_image(void *userdata,
                TEXTURE_FILTER_MIPMAP_LINEAR,
                &zui->textures.bg);
          break;
-      case MENU_IMAGE_BOXART:
+      case MENU_IMAGE_THUMBNAIL:
          break;
    }
 
@@ -1299,7 +1309,7 @@ static bool zarch_menu_init_list(void *data)
    strlcpy(info.label,
          menu_hash_to_str(MENU_VALUE_HISTORY_TAB), sizeof(info.label));
 
-   menu_entries_push(menu_stack,
+   menu_entries_add(menu_stack,
          info.path, info.label, info.type, info.flags, 0);
 
    event_cmd_ctl(EVENT_CMD_HISTORY_INIT, NULL);
@@ -1335,6 +1345,7 @@ menu_ctx_driver_t menu_ctx_zarch = {
    NULL,
    NULL,
    zarch_menu_init_list,
+   NULL,
    NULL,
    NULL,
    NULL,

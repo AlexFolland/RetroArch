@@ -32,6 +32,7 @@
 #include "video_shader_parse.h"
 
 #define GL_SHADER_STOCK_BLEND (GFX_MAX_SHADERS - 1)
+#define GL_SHADER_STOCK_XMB (GFX_MAX_SHADERS - 2)
 
 #endif
 
@@ -74,6 +75,69 @@ enum video_shader_driver_ctl_state
    SHADER_CTL_DIRECT_GET_CURRENT_SHADER,
    SHADER_CTL_GET_IDENT,
    SHADER_CTL_GET_PREV_TEXTURES
+};
+
+enum shader_uniform_type
+{
+   UNIFORM_1F = 0,
+   UNIFORM_2F,
+   UNIFORM_3F,
+   UNIFORM_4F,
+   UNIFORM_1FV,
+   UNIFORM_2FV,
+   UNIFORM_3FV,
+   UNIFORM_4FV,
+   UNIFORM_1I
+};
+
+struct shader_program_info
+{
+   const char *vertex;
+   const char *fragment;
+   const char *combined;
+   bool is_file;
+};
+
+struct uniform_info
+{
+   enum shader_uniform_type type;
+   bool enabled;
+
+   int32_t location;
+   int32_t count;
+
+   struct
+   {
+      struct
+      {
+         intptr_t v0;
+         intptr_t v1;
+         intptr_t v2;
+         intptr_t v3;
+      } integer;
+
+      intptr_t *integerv;
+
+      struct
+      {
+         uintptr_t v0;
+         uintptr_t v1;
+         uintptr_t v2;
+         uintptr_t v3;
+      } unsigned_integer;
+
+      uintptr_t *unsigned_integerv;
+
+      struct
+      {
+         float v0;
+         float v1;
+         float v2;
+         float v3;
+      } f;
+
+      float *floatv;
+   } result;
 };
 
 typedef struct shader_backend

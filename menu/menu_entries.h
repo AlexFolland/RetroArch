@@ -139,7 +139,7 @@ file_list_t *menu_entries_get_selection_buf_ptr(size_t idx);
 
 file_list_t *menu_entries_get_menu_stack_ptr(size_t idx);
 
-void menu_entries_push(file_list_t *list, const char *path, const char *label,
+void menu_entries_add(file_list_t *list, const char *path, const char *label,
       unsigned type, size_t directory_ptr, size_t entry_idx);
 
 void menu_entries_get_last_stack(const char **path, const char **label,
@@ -173,6 +173,9 @@ void menu_entries_set_alt_at_offset(file_list_t *list, size_t idx,
       const char *alt);
 
 rarch_setting_t *menu_entries_get_setting(uint32_t i);
+
+void menu_entries_prepend(file_list_t *list, const char *path, const char *label,
+      unsigned type, size_t directory_ptr, size_t entry_idx);
 
 bool menu_entries_ctl(enum menu_entries_ctl_state state, void *data);
 
