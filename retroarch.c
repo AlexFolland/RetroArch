@@ -1244,7 +1244,7 @@ static int rarch_main_init(int argc, char *argv[])
    {
       char str[PATH_MAX_LENGTH] = {0};
 
-      RARCH_LOG_OUTPUT("=== Build =======================================");
+      RARCH_LOG_OUTPUT("=== Build =======================================\n");
       rarch_info_get_capabilities(RARCH_CAPABILITIES_CPU, str, sizeof(str));
       fprintf(stderr, "%s", str);
       fprintf(stderr, "Built: %s\n", __DATE__);
