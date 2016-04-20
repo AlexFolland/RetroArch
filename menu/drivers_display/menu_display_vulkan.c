@@ -37,26 +37,44 @@ static const float vk_tex_coords[] = {
    1, 1
 };
 
-static vk_t *vk_get_ptr(void)
+static void *menu_display_vk_get_default_mvp(void)
 {
    vk_t *vk = (vk_t*)video_driver_get_ptr(false);
    if (!vk)
       return NULL;
-   return vk;
+   return &vk->mvp_no_rot;
 }
 
-static void *menu_display_vk_get_default_mvp(void)
+static const float *menu_display_vk_get_default_vertices(void)
 {
-   vk_t *vk = vk_get_ptr();
-   if (!vk)
-      return NULL;
-   return &vk->mvp_no_rot;
+   return &vk_vertexes[0];
+}
+
+static const float *menu_display_vk_get_default_tex_coords(void)
+{
+   return &vk_tex_coords[0];
 }
 
 static unsigned to_display_pipeline(
       enum menu_display_prim_type type, bool blend)
 {
    return ((type == MENU_DISPLAY_PRIM_TRIANGLESTRIP) << 1) | (blend << 0);
+}
+
+static void menu_display_vk_viewport(void *data)
+{
+   menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
+   vk_t *vk                      = (vk_t*)video_driver_get_ptr(false);
+
+   if (!vk || !draw)
+      return;
+
+   vk->vk_vp.x        = draw->x;
+   vk->vk_vp.y        = vk->context->swapchain_height - draw->y - draw->height;
+   vk->vk_vp.width    = draw->width;
+   vk->vk_vp.height   = draw->height;
+   vk->vk_vp.minDepth = 0.0f;
+   vk->vk_vp.maxDepth = 1.0f;
 }
 
 static void menu_display_vk_draw(void *data)
@@ -67,38 +85,28 @@ static void menu_display_vk_draw(void *data)
    const float *vertex           = NULL;
    const float *tex_coord        = NULL;
    const float *color            = NULL;
-   math_matrix_4x4 *mat          = NULL;
    struct vk_vertex *pv          = NULL;
    menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
-   vk_t *vk                      = vk_get_ptr();
-   if (!vk)
+   vk_t *vk                      = (vk_t*)video_driver_get_ptr(false);
+
+   if (!vk || !draw)
       return;
 
    texture            = (struct vk_texture*)draw->texture;
-   mat                = (math_matrix_4x4*)draw->matrix_data;
    vertex             = draw->coords->vertex;
    tex_coord          = draw->coords->tex_coord;
    color              = draw->coords->color;
 
-   /* TODO - edge case */
-   if (draw->height <= 0)
-      draw->height    = 1;
-
-   if (!mat)
-      mat             = (math_matrix_4x4*)menu_display_vk_get_default_mvp();
    if (!vertex)
-      vertex          = &vk_vertexes[0];
+      vertex          = menu_display_vk_get_default_vertices();
    if (!tex_coord)
-      tex_coord       = &vk_tex_coords[0];
+      tex_coord       = menu_display_vk_get_default_tex_coords();
+   if (!draw->coords->lut_tex_coord)
+      draw->coords->lut_tex_coord = menu_display_vk_get_default_tex_coords();
    if (!texture)
       texture         = &vk->display.blank_texture;
 
-   vk->vk_vp.x        = draw->x;
-   vk->vk_vp.y        = vk->context->swapchain_height - draw->y - draw->height;
-   vk->vk_vp.width    = draw->width;
-   vk->vk_vp.height   = draw->height;
-   vk->vk_vp.minDepth = 0.0f;
-   vk->vk_vp.maxDepth = 1.0f;
+   menu_display_vk_viewport(draw);
    vk->tracker.dirty |= VULKAN_DIRTY_DYNAMIC_BIT;
 
    /* Bake interleaved VBO. Kinda ugly, we should probably try to move to
@@ -127,7 +135,8 @@ static void menu_display_vk_draw(void *data)
          texture,
          texture->default_smooth 
             ? vk->samplers.linear : vk->samplers.nearest,
-         mat,
+         draw->matrix_data ? (math_matrix_4x4*)draw->matrix_data 
+            : (math_matrix_4x4*)menu_display_vk_get_default_mvp(),
          &range,
          draw->coords->vertices,
       };
@@ -135,48 +144,16 @@ static void menu_display_vk_draw(void *data)
    }
 }
 
-static void menu_display_vk_draw_bg(void *data)
-{
-   struct gfx_coords coords;
-   const float *new_vertex       = NULL;
-   const float *new_tex_coord    = NULL;
-   menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
-   settings_t *settings          = config_get_ptr();
-   vk_t             *vk          = vk_get_ptr();
-
-   if (!vk || !draw)
-      return;
-
-   if (!new_vertex)
-      new_vertex = &vk_vertexes[0];
-   if (!new_tex_coord)
-      new_tex_coord = &vk_tex_coords[0];
-
-   coords.vertices      = draw->vertex_count;
-   coords.vertex        = new_vertex;
-   coords.tex_coord     = new_tex_coord;
-   coords.color         = (const float*)draw->color;
-
-   draw->x           = 0;
-   draw->y           = 0;
-   draw->coords      = &coords;
-   draw->matrix_data = (math_matrix_4x4*)
-      menu_display_vk_get_default_mvp();
-
-   menu_display_vk_draw(draw);
-}
 
 static void menu_display_vk_restore_clear_color(void)
 {
 }
 
-static void menu_display_vk_clear_color(void *data)
+static void menu_display_vk_clear_color(menu_display_ctx_clearcolor_t *clearcolor)
 {
    VkClearRect rect;
    VkClearAttachment attachment;
-   menu_display_ctx_clearcolor_t *clearcolor =
-      (menu_display_ctx_clearcolor_t*)data;
-   vk_t *vk = vk_get_ptr();
+   vk_t *vk                      = (vk_t*)video_driver_get_ptr(false);
    if (!vk || !clearcolor)
       return;
 
@@ -194,20 +171,15 @@ static void menu_display_vk_clear_color(void *data)
    VKFUNC(vkCmdClearAttachments)(vk->cmd, 1, &attachment, 1, &rect);
 }
 
-static const float *menu_display_vk_get_tex_coords(void)
-{
-   return &vk_tex_coords[0];
-}
-
 static void menu_display_vk_blend_begin(void)
 {
-   vk_t *vk = vk_get_ptr();
+   vk_t *vk = (vk_t*)video_driver_get_ptr(false);
    vk->display.blend = true;
 }
 
 static void menu_display_vk_blend_end(void)
 {
-   vk_t *vk = vk_get_ptr();
+   vk_t *vk = (vk_t*)video_driver_get_ptr(false);
    vk->display.blend = false;
 }
 
@@ -221,13 +193,14 @@ static bool menu_display_vk_font_init_first(
 
 menu_display_ctx_driver_t menu_display_ctx_vulkan = {
    menu_display_vk_draw,
-   menu_display_vk_draw_bg,
+   menu_display_vk_viewport,
    menu_display_vk_blend_begin,
    menu_display_vk_blend_end,
    menu_display_vk_restore_clear_color,
    menu_display_vk_clear_color,
    menu_display_vk_get_default_mvp,
-   menu_display_vk_get_tex_coords,
+   menu_display_vk_get_default_vertices,
+   menu_display_vk_get_default_tex_coords,
    menu_display_vk_font_init_first,
    MENU_VIDEO_DRIVER_VULKAN,
    "menu_display_vulkan",

@@ -58,7 +58,7 @@ struct cache_vbo
    size_t size_secondary;
 };
 
-struct shader_program_data
+struct shader_program_glsl_data
 {
    GLuint vprg;
    GLuint fprg;
@@ -113,148 +113,19 @@ static const char *glsl_prefixes[] = {
    "ruby",
 };
 
-/* Need to duplicate these to work around broken stuff on Android.
- * Must enforce alpha = 1.0 or 32-bit games can potentially go black. */
-static const char *stock_vertex_modern =
-   "attribute vec2 TexCoord;\n"
-   "attribute vec2 VertexCoord;\n"
-   "attribute vec4 Color;\n"
-   "uniform mat4 MVPMatrix;\n"
-   "varying vec2 tex_coord;\n"
-   "void main() {\n"
-   "   gl_Position = MVPMatrix * vec4(VertexCoord, 0.0, 1.0);\n"
-   "   tex_coord = TexCoord;\n"
-   "}";
+#include "../drivers/gl_shaders/modern_opaque.glsl.vert.h"
+#include "../drivers/gl_shaders/modern_opaque.glsl.frag.h"
+#include "../drivers/gl_shaders/core_opaque.glsl.vert.h"
+#include "../drivers/gl_shaders/core_opaque.glsl.frag.h"
+#include "../drivers/gl_shaders/legacy_opaque.glsl.vert.h"
+#include "../drivers/gl_shaders/legacy_opaque.glsl.frag.h"
+#include "../drivers/gl_shaders/modern_alpha_blend.glsl.vert.h"
+#include "../drivers/gl_shaders/modern_alpha_blend.glsl.frag.h"
+#include "../drivers/gl_shaders/core_alpha_blend.glsl.vert.h"
+#include "../drivers/gl_shaders/core_alpha_blend.glsl.frag.h"
 
-static const char *stock_fragment_modern =
-   "#ifdef GL_ES\n"
-   "precision mediump float;\n"
-   "#endif\n"
-   "uniform sampler2D Texture;\n"
-   "varying vec2 tex_coord;\n"
-   "void main() {\n"
-   "   gl_FragColor = vec4(texture2D(Texture, tex_coord).rgb, 1.0);\n"
-   "}";
-
-static const char *stock_vertex_core =
-   "in vec2 TexCoord;\n"
-   "in vec2 VertexCoord;\n"
-   "in vec4 Color;\n"
-   "uniform mat4 MVPMatrix;\n"
-   "out vec2 tex_coord;\n"
-   "void main() {\n"
-   "   gl_Position = MVPMatrix * vec4(VertexCoord, 0.0, 1.0);\n"
-   "   tex_coord = TexCoord;\n"
-   "}";
-
-static const char *stock_fragment_core =
-   "uniform sampler2D Texture;\n"
-   "in vec2 tex_coord;\n"
-   "out vec4 FragColor;\n"
-   "void main() {\n"
-   "   FragColor = vec4(texture(Texture, tex_coord).rgb, 1.0);\n"
-   "}";
-
-static const char *stock_vertex_legacy =
-   "varying vec4 color;\n"
-   "void main() {\n"
-   "   gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;\n"
-   "   gl_TexCoord[0] = gl_MultiTexCoord0;\n"
-   "   color = gl_Color;\n"
-   "}";
-
-static const char *stock_fragment_legacy =
-   "uniform sampler2D Texture;\n"
-   "varying vec4 color;\n"
-   "void main() {\n"
-   "   gl_FragColor = color * texture2D(Texture, gl_TexCoord[0].xy);\n"
-   "}";
-
-static const char *stock_vertex_modern_blend =
-   "#ifdef GL_ES\n"
-   "precision mediump float;\n"
-   "#endif\n"
-   "attribute vec2 TexCoord;\n"
-   "attribute vec2 VertexCoord;\n"
-   "attribute vec4 Color;\n"
-   "uniform mat4 MVPMatrix;\n"
-   "varying vec2 tex_coord;\n"
-   "varying vec4 color;\n"
-   "void main() {\n"
-   "   gl_Position = MVPMatrix * vec4(VertexCoord, 0.0, 1.0);\n"
-   "   tex_coord = TexCoord;\n"
-   "   color = Color;\n"
-   "}";
-
-static const char *stock_fragment_modern_blend =
-   "#ifdef GL_ES\n"
-   "precision mediump float;\n"
-   "#endif\n"
-   "uniform sampler2D Texture;\n"
-   "varying vec2 tex_coord;\n"
-   "varying vec4 color;\n"
-   "void main() {\n"
-   "   gl_FragColor = color * texture2D(Texture, tex_coord);\n"
-   "}";
-
-static const char *stock_vertex_core_blend =
-   "in vec2 TexCoord;\n"
-   "in vec2 VertexCoord;\n"
-   "in vec4 Color;\n"
-   "uniform mat4 MVPMatrix;\n"
-   "out vec2 tex_coord;\n"
-   "out vec4 color;\n"
-   "void main() {\n"
-   "   gl_Position = MVPMatrix * vec4(VertexCoord, 0.0, 1.0);\n"
-   "   tex_coord = TexCoord;\n"
-   "   color = Color;\n"
-   "}";
-
-static const char *stock_fragment_core_blend =
-   "uniform sampler2D Texture;\n"
-   "in vec2 tex_coord;\n"
-   "in vec4 color;\n"
-   "out vec4 FragColor;\n"
-   "void main() {\n"
-   "   FragColor = color * texture(Texture, tex_coord);\n"
-   "}";
-
-static const char *stock_vertex_xmb =
-   "attribute vec3 vPosition;\n"
-   "uniform float time;\n"
-   "varying vec3 v;\n"
-   "float iqhash( float n )\n"
-   "{\n"
-   "  return fract(sin(n)*43758.5453);\n"
-   "}\n"
-   "float noise( vec3 x )\n"
-   "{\n"
-   "  vec3 p = floor(x);\n"
-   "  vec3 f = fract(x);\n"
-   "  f = f*f*(3.0-2.0*f);\n"
-   "  float n = p.x + p.y*57.0 + 113.0*p.z;\n"
-   "  return mix(mix(mix( iqhash(n+0.0 ), iqhash(n+1.0 ),f.x),\n"
-   "  mix( iqhash(n+57.0 ), iqhash(n+58.0 ),f.x),f.y),\n"
-   "  mix(mix( iqhash(n+113.0), iqhash(n+114.0),f.x),\n"
-   "  mix( iqhash(n+170.0), iqhash(n+171.0),f.x),f.y),f.z);\n"
-   "}\n"
-   "void main()\n"
-   "{\n"
-   "  v = vPosition;\n"
-   "  vec3 v2 = v;\n"
-   "  v2.x = v2.x + time/2.0;\n"
-   "  v2.z = v.z * 3.0;\n"
-   "  v.y = -cos((v.x+v.z/3.0+time)*2.0)/10.0 - noise(v2.xyz)/4.0;\n"
-   "  gl_Position = vec4(v, 1.0);\n"
-   "}\n";
-
-static const char *stock_fragment_xmb =
-   "uniform float time;\n"
-   "varying vec3 v;\n"
-   "void main()\n"
-   "{\n"
-   "  gl_FragColor = vec4(1.0, 1.0, 1.0, 0.05);\n"
-   "}\n";
+#include "../drivers/gl_shaders/pipeline_xmb_ribbon.glsl.vert.h"
+#include "../drivers/gl_shaders/pipeline_xmb_ribbon.glsl.frag.h"
 
 typedef struct glsl_shader_data
 {
@@ -264,7 +135,7 @@ typedef struct glsl_shader_data
    char glsl_alias_define[1024];
    unsigned glsl_active_index;
    unsigned gl_attrib_index;
-   shader_program_data_t prg[GFX_MAX_SHADERS];
+   struct shader_program_glsl_data prg[GFX_MAX_SHADERS];
    GLuint gl_teximage[GFX_MAX_TEXTURES];
    GLint gl_attribs[PREV_TEXTURES + 2 + 4 + GFX_MAX_SHADERS];
    state_tracker_t *gl_state_tracker;
@@ -431,11 +302,15 @@ static bool gl_glsl_link_program(GLuint prog)
 static bool gl_glsl_compile_program(
       void *data,
       unsigned idx,
-      shader_program_data_t *program,
+      void *program_data,
       struct shader_program_info *program_info)
 {
    glsl_shader_data_t *glsl = (glsl_shader_data_t*)data;
+   struct shader_program_glsl_data *program = (struct shader_program_glsl_data*)program_data;
    GLuint prog = glCreateProgram();
+
+   if (!program)
+      program = &glsl->prg[idx];
 
    if (!prog)
       goto error;
@@ -533,13 +408,12 @@ static bool gl_glsl_load_source_path(struct video_shader_pass *pass,
 }
 
 static bool gl_glsl_compile_programs(
-      glsl_shader_data_t *glsl, shader_program_data_t *program)
+      glsl_shader_data_t *glsl, struct shader_program_glsl_data *program)
 {
    unsigned i;
 
    for (i = 0; i < glsl->shader->passes; i++)
    {
-      shader_program_data_t prg;
       struct shader_program_info shader_prog_info;
       const char *vertex           = NULL;
       const char *fragment         = NULL;
@@ -850,7 +724,7 @@ static void *gl_glsl_init(void *data, const char *path)
 
    if (path)
    {
-      bool ret;
+      bool ret             = false;
       const char *path_ext = path_get_extension(path);
 
       if (string_is_equal(path_ext, "glsl"))
@@ -869,11 +743,7 @@ static void *gl_glsl_init(void *data, const char *path)
             ret = video_shader_read_conf_cgp(conf, glsl->shader);
             glsl->shader->modern = true;
          }
-         else
-            ret = false;
       }
-      else
-         ret = false;
 
       if (!ret)
       {
@@ -1007,18 +877,18 @@ static void *gl_glsl_init(void *data, const char *path)
 
       gl_glsl_compile_program(
             glsl,
-            GL_SHADER_STOCK_BLEND,
-            &glsl->prg[GL_SHADER_STOCK_BLEND],
+            VIDEO_SHADER_STOCK_BLEND,
+            &glsl->prg[VIDEO_SHADER_STOCK_BLEND],
             &shader_prog_info
             );
 
-      gl_glsl_find_uniforms(glsl, 0, glsl->prg[GL_SHADER_STOCK_BLEND].id,
-            &glsl->uniforms[GL_SHADER_STOCK_BLEND]);
+      gl_glsl_find_uniforms(glsl, 0, glsl->prg[VIDEO_SHADER_STOCK_BLEND].id,
+            &glsl->uniforms[VIDEO_SHADER_STOCK_BLEND]);
    }
    else
    {
-      glsl->prg[GL_SHADER_STOCK_BLEND] = glsl->prg[0];
-      glsl->uniforms[GL_SHADER_STOCK_BLEND] = glsl->uniforms[0];
+      glsl->prg[VIDEO_SHADER_STOCK_BLEND] = glsl->prg[0];
+      glsl->uniforms[VIDEO_SHADER_STOCK_BLEND] = glsl->uniforms[0];
    }
 
    shader_prog_info.vertex   = stock_vertex_xmb;
@@ -1027,8 +897,8 @@ static void *gl_glsl_init(void *data, const char *path)
 
    gl_glsl_compile_program(
          glsl,
-         GL_SHADER_STOCK_XMB,
-         &glsl->prg[GL_SHADER_STOCK_XMB],
+         VIDEO_SHADER_MENU,
+         &glsl->prg[VIDEO_SHADER_MENU],
          &shader_prog_info);
 
    gl_glsl_reset_attrib(glsl);
@@ -1050,49 +920,54 @@ error:
    return NULL;
 }
 
-#if 0
-static float t = 0;
-
-#endif
-static void glsl_uniform_set_parameter(void *data, shader_program_data_t *shader_data, void *uniform_data)
+static void gl_glsl_set_uniform_parameter(
+      void *data,
+      struct uniform_info *param,
+      void *uniform_data)
 {
-   struct uniform_info *param = (struct uniform_info*)data;
+   GLint location = 0;
+   glsl_shader_data_t              *glsl = (glsl_shader_data_t*)data;
 
    if (!param)
       return;
 
+   if (param->lookup.enable)
+      location = glGetUniformLocation(glsl->prg[param->lookup.idx].id, param->lookup.ident);
+   else
+      location = param->location;
+
    switch (param->type)
    {
       case UNIFORM_1F:
-         glUniform1f(param->location, param->result.f.v0);
+         glUniform1f(location, param->result.f.v0);
          break;
       case UNIFORM_2F:
-         glUniform2f(param->location, param->result.f.v0,
+         glUniform2f(location, param->result.f.v0,
                param->result.f.v1);
          break;
       case UNIFORM_3F:
-         glUniform3f(param->location, param->result.f.v0,
+         glUniform3f(location, param->result.f.v0,
                param->result.f.v1, param->result.f.v2);
          break;
       case UNIFORM_4F:
-         glUniform4f(param->location, param->result.f.v0,
+         glUniform4f(location, param->result.f.v0,
                param->result.f.v1, param->result.f.v2,
                param->result.f.v3);
          break;
       case UNIFORM_1FV:
-         glUniform1fv(param->location, 1, param->result.floatv);
+         glUniform1fv(location, 1, param->result.floatv);
          break;
       case UNIFORM_2FV:
-         glUniform2fv(param->location, 1, param->result.floatv);
+         glUniform2fv(location, 1, param->result.floatv);
          break;
       case UNIFORM_3FV:
-         glUniform3fv(param->location, 1, param->result.floatv);
+         glUniform3fv(location, 1, param->result.floatv);
          break;
       case UNIFORM_4FV:
-         glUniform4fv(param->location, 1, param->result.floatv);
+         glUniform4fv(location, 1, param->result.floatv);
          break;
       case UNIFORM_1I:
-         glUniform1i(param->location, param->result.integer.v0);
+         glUniform1i(location, param->result.integer.v0);
          break;
    }
 }
@@ -1108,7 +983,7 @@ static void gl_glsl_set_params(void *data, void *shader_data,
       const void *_fbo_info, unsigned fbo_info_cnt)
 {
    unsigned i;
-   struct uniform_info uniform_params[10];
+   struct uniform_info uniform_params[10] = {{0}};
    GLfloat buffer[512];
    struct glsl_attrib attribs[32];
    float input_size[2], output_size[2], texture_size[2];
@@ -1130,14 +1005,6 @@ static void gl_glsl_set_params(void *data, void *shader_data,
 
    if (glsl->prg[glsl->glsl_active_index].id == 0)
       return;
-
-#if 0
-   t += 0.004;
-   glUseProgram(glsl->prg[GL_SHADER_STOCK_XMB]);
-   int location = glGetUniformLocation(glsl->prg[GL_SHADER_STOCK_XMB], "time");
-   glUniform1f(location, t);
-   glUseProgram(0);
-#endif
 
    input_size [0]  = (float)width;
    input_size [1]  = (float)height;
@@ -1195,12 +1062,12 @@ static void gl_glsl_set_params(void *data, void *shader_data,
    uniform_count++;
 
    for (i = 0; i < uniform_count; i++)
-      glsl_uniform_set_parameter(&uniform_params[i], NULL, NULL);
+      gl_glsl_set_uniform_parameter(glsl, &uniform_params[i], NULL);
 
    /* Set lookup textures. */
    for (i = 0; i < glsl->shader->luts; i++)
    {
-      struct uniform_info lut_uniform;
+      struct uniform_info lut_uniform = {0};
       if (uni->lut_texture[i] < 0)
          continue;
 
@@ -1213,20 +1080,20 @@ static void gl_glsl_set_params(void *data, void *shader_data,
       lut_uniform.type              = UNIFORM_1I;
       lut_uniform.result.integer.v0 = texunit;
 
-      glsl_uniform_set_parameter(&lut_uniform, NULL, NULL);
+      gl_glsl_set_uniform_parameter(glsl, &lut_uniform, NULL);
       texunit++;
    }
 
    if (glsl->glsl_active_index)
    {
       unsigned j;
-      struct uniform_info orig_uniforms[2];
-      struct uniform_info feedback_uniforms[2];
+      struct uniform_info orig_uniforms[2]     = {{0}};
+      struct uniform_info feedback_uniforms[2] = {{0}};
 
       /* Set original texture. */
       if (uni->orig.texture >= 0)
       {
-         struct uniform_info orig_tex_uniform;
+         struct uniform_info orig_tex_uniform = {0};
          /* Bind original texture. */
          glActiveTexture(GL_TEXTURE0 + texunit);
 
@@ -1235,7 +1102,7 @@ static void gl_glsl_set_params(void *data, void *shader_data,
          orig_tex_uniform.type              = UNIFORM_1I;
          orig_tex_uniform.result.integer.v0 = texunit;
 
-         glsl_uniform_set_parameter(&orig_tex_uniform, NULL, NULL);
+         gl_glsl_set_uniform_parameter(glsl, &orig_tex_uniform, NULL);
 
          glBindTexture(GL_TEXTURE_2D, info->tex);
          texunit++;
@@ -1258,7 +1125,7 @@ static void gl_glsl_set_params(void *data, void *shader_data,
          orig_uniforms[1].enabled        = true;
 
       for (j = 0; j < 2; j++)
-         glsl_uniform_set_parameter(&orig_uniforms[i], NULL, NULL);
+         gl_glsl_set_uniform_parameter(glsl, &orig_uniforms[j], NULL);
 
       /* Pass texture coordinates. */
       if (uni->orig.tex_coord >= 0)
@@ -1276,7 +1143,7 @@ static void gl_glsl_set_params(void *data, void *shader_data,
       /* Set feedback texture. */
       if (uni->feedback.texture >= 0)
       {
-         struct uniform_info feedback_texture_param;
+         struct uniform_info feedback_texture_param = {0};
 
          /* Bind original texture. */
          glActiveTexture(GL_TEXTURE0 + texunit);
@@ -1286,7 +1153,7 @@ static void gl_glsl_set_params(void *data, void *shader_data,
          feedback_texture_param.type     = UNIFORM_1I;
          feedback_texture_param.result.integer.v0 = texunit;
 
-         glsl_uniform_set_parameter(&feedback_texture_param, NULL, NULL);
+         gl_glsl_set_uniform_parameter(glsl, &feedback_texture_param, NULL);
 
          glBindTexture(GL_TEXTURE_2D, feedback_info->tex);
          texunit++;
@@ -1309,7 +1176,7 @@ static void gl_glsl_set_params(void *data, void *shader_data,
          feedback_uniforms[1].enabled        = true;
 
       for (j = 0; j < 2; j++)
-         glsl_uniform_set_parameter(&feedback_uniforms[i], NULL, NULL);
+         gl_glsl_set_uniform_parameter(glsl, &feedback_uniforms[j], NULL);
 
       /* Pass texture coordinates. */
       if (uni->feedback.tex_coord >= 0)
@@ -1328,7 +1195,7 @@ static void gl_glsl_set_params(void *data, void *shader_data,
       for (i = 0; i < fbo_info_cnt; i++)
       {
          unsigned j;
-         struct uniform_info fbo_tex_params[3];
+         struct uniform_info fbo_tex_params[3] = {{0}};
 
          if (uni->pass[i].texture)
          {
@@ -1360,7 +1227,7 @@ static void gl_glsl_set_params(void *data, void *shader_data,
             fbo_tex_params[2].enabled  = true;
 
          for (j = 0; j < 3; j++)
-            glsl_uniform_set_parameter(&fbo_tex_params[i], NULL, NULL);
+            gl_glsl_set_uniform_parameter(glsl, &fbo_tex_params[j], NULL);
 
          if (uni->pass[i].tex_coord >= 0)
          {
@@ -1380,7 +1247,7 @@ static void gl_glsl_set_params(void *data, void *shader_data,
    for (i = 0; i < PREV_TEXTURES; i++)
    {
       unsigned j;
-      struct uniform_info prev_tex_params[3];
+      struct uniform_info prev_tex_params[3] = {{0}};
 
       if (uni->prev[i].texture >= 0)
       {
@@ -1412,7 +1279,7 @@ static void gl_glsl_set_params(void *data, void *shader_data,
          prev_tex_params[2].enabled  = true;
 
       for (j = 0; j < 3; j++)
-         glsl_uniform_set_parameter(&prev_tex_params[i], NULL, NULL);
+         gl_glsl_set_uniform_parameter(glsl, &prev_tex_params[j], NULL);
 
       /* Pass texture coordinates. */
       if (uni->prev[i].tex_coord >= 0)
@@ -1439,17 +1306,17 @@ static void gl_glsl_set_params(void *data, void *shader_data,
    /* #pragma parameters. */
    for (i = 0; i < glsl->shader->num_parameters; i++)
    {
-      struct uniform_info pragma_param;
-      int location = glGetUniformLocation(
-            glsl->prg[glsl->glsl_active_index].id,
-            glsl->shader->parameters[i].id);
+      struct uniform_info pragma_param = {0};
 
-      pragma_param.enabled     = true;
-      pragma_param.location    = location;
-      pragma_param.type        = UNIFORM_1F;
-      pragma_param.result.f.v0 = glsl->shader->parameters[i].current;
+      pragma_param.lookup.enable  = true;
+      pragma_param.lookup.idx     = glsl->glsl_active_index;
+      pragma_param.lookup.ident   = glsl->shader->parameters[i].id;
+      pragma_param.lookup.type    = SHADER_PROGRAM_COMBINED;
+      pragma_param.enabled        = true;
+      pragma_param.type           = UNIFORM_1F;
+      pragma_param.result.f.v0    = glsl->shader->parameters[i].current;
 
-      glsl_uniform_set_parameter(&pragma_param, NULL, NULL);
+      gl_glsl_set_uniform_parameter(glsl, &pragma_param, NULL);
    }
 
    /* Set state parameters. */
@@ -1464,17 +1331,17 @@ static void gl_glsl_set_params(void *data, void *shader_data,
 
       for (i = 0; i < cnt; i++)
       {
-         struct uniform_info state_param;
-         int location = glGetUniformLocation(
-               glsl->prg[glsl->glsl_active_index].id,
-               state_info[i].id);
+         struct uniform_info state_param = {0};
 
-         state_param.enabled     = true;
-         state_param.location    = location;
-         state_param.type        = UNIFORM_1F;
-         state_param.result.f.v0 = state_info[i].value;
+         state_param.lookup.enable = true;
+         state_param.lookup.idx    = glsl->glsl_active_index;
+         state_param.lookup.ident  = state_info[i].id;
+         state_param.lookup.type   = SHADER_PROGRAM_COMBINED;
+         state_param.enabled       = true;
+         state_param.type          = UNIFORM_1F;
+         state_param.result.f.v0   = state_info[i].value;
 
-         glsl_uniform_set_parameter(&state_param, NULL, NULL);
+         gl_glsl_set_uniform_parameter(glsl, &state_param, NULL);
       }
    }
 }
@@ -1487,19 +1354,32 @@ static bool gl_glsl_set_mvp(void *data, void *shader_data, const math_matrix_4x4
    (void)data;
 
    if (!glsl || !glsl->shader->modern)
-   {
-      gl_ff_matrix(mat);
-      return false;
-   }
+      goto fallback;
 
    loc = glsl->uniforms[glsl->glsl_active_index].mvp;
    if (loc >= 0)
       glUniformMatrix4fv(loc, 1, GL_FALSE, mat->data);
 
    return true;
+
+fallback:
+   gl_ff_matrix(mat);
+   return false;
 }
 
-static bool gl_glsl_set_coords(void *handle_data, void *shader_data, const void *data)
+#define gl_glsl_set_coord_array(attr, coord1, coord2, coords, size, multiplier) \
+{ \
+      attr->loc    = coord1; \
+      attr->size   = multiplier; \
+      attr->offset = size * sizeof(GLfloat); \
+      attribs_size++; \
+      attr++; \
+      memcpy(buffer + size, coord2,  \
+            multiplier * coords->vertices * sizeof(GLfloat)); \
+      size += multiplier * coords->vertices; \
+}
+
+static bool gl_glsl_set_coords(void *handle_data, void *shader_data, const struct gfx_coords *coords)
 {
    /* Avoid hitting malloc on every single regular quad draw. */
    GLfloat short_buffer[4 * (2 + 2 + 4 + 2)];
@@ -1508,14 +1388,10 @@ static bool gl_glsl_set_coords(void *handle_data, void *shader_data, const void 
    size_t attribs_size = 0, size = 0;
    struct glsl_attrib *attr = NULL;
    const struct shader_uniforms *uni = NULL;
-   const struct gfx_coords *coords = (const struct gfx_coords*)data;
    glsl_shader_data_t *glsl = (glsl_shader_data_t*)shader_data;
 
    if (!glsl || !glsl->shader->modern || !coords)
-   {
-      gl_ff_vertex(coords);
-      return false;
-   }
+      goto fallback;
 
    buffer = short_buffer;
    if (coords->vertices > 4)
@@ -1523,65 +1399,22 @@ static bool gl_glsl_set_coords(void *handle_data, void *shader_data, const void 
             (2 + 2 + 4 + 2), sizeof(*buffer));
 
    if (!buffer)
-   {
-      gl_ff_vertex(coords);
-      return false;
-   }
+      goto fallback;
 
    attr = attribs;
    uni  = &glsl->uniforms[glsl->glsl_active_index];
 
    if (uni->tex_coord >= 0)
-   {
-      attr->loc    = uni->tex_coord;
-      attr->size   = 2;
-      attr->offset = size * sizeof(GLfloat);
-      attribs_size++;
-      attr++;
-
-      memcpy(buffer + size, coords->tex_coord, 
-            2 * coords->vertices * sizeof(GLfloat));
-      size += 2 * coords->vertices;
-   }
+      gl_glsl_set_coord_array(attr, uni->tex_coord, coords->tex_coord, coords, size, 2);
 
    if (uni->vertex_coord >= 0)
-   {
-      attr->loc    = uni->vertex_coord;
-      attr->size   = 2;
-      attr->offset = size * sizeof(GLfloat);
-      attribs_size++;
-      attr++;
-
-      memcpy(buffer + size, coords->vertex, 
-            2 * coords->vertices * sizeof(GLfloat));
-      size += 2 * coords->vertices;
-   }
+      gl_glsl_set_coord_array(attr, uni->vertex_coord, coords->vertex, coords, size, 2);
 
    if (uni->color >= 0)
-   {
-      attr->loc    = uni->color;
-      attr->size   = 4;
-      attr->offset = size * sizeof(GLfloat);
-      attribs_size++;
-      attr++;
-
-      memcpy(buffer + size, coords->color,
-            4 * coords->vertices * sizeof(GLfloat));
-      size += 4 * coords->vertices;
-   }
+      gl_glsl_set_coord_array(attr, uni->color, coords->color, coords, size, 4);
 
    if (uni->lut_tex_coord >= 0)
-   {
-      attr->loc    = uni->lut_tex_coord;
-      attr->size   = 2;
-      attr->offset = size * sizeof(GLfloat);
-      attribs_size++;
-      attr++;
-
-      memcpy(buffer + size, coords->lut_tex_coord,
-            2 * coords->vertices * sizeof(GLfloat));
-      size += 2 * coords->vertices;
-   }
+      gl_glsl_set_coord_array(attr, uni->lut_tex_coord, coords->lut_tex_coord, coords, size, 2);
 
    if (size)
       gl_glsl_set_attribs(glsl,
@@ -1595,21 +1428,30 @@ static bool gl_glsl_set_coords(void *handle_data, void *shader_data, const void 
       free(buffer);
 
    return true;
+
+fallback:
+   gl_ff_vertex(coords);
+   return false;
 }
 
-static void gl_glsl_use(void *data, void *shader_data, unsigned idx)
+static void gl_glsl_use(void *data, void *shader_data, unsigned idx, bool set_active)
 {
-   glsl_shader_data_t *glsl = (glsl_shader_data_t*)shader_data;
+   GLuint id;
 
-   (void)data;
+   if (set_active)
+   {
+      glsl_shader_data_t *glsl = (glsl_shader_data_t*)shader_data;
+      if (!glsl)
+         return;
 
-   if (!glsl)
-      return;
+      gl_glsl_reset_attrib(glsl);
+      glsl->glsl_active_index = idx;
+      id                      = glsl->prg[idx].id;
+   }
+   else 
+      id = (GLuint)idx;
 
-   gl_glsl_reset_attrib(glsl);
-
-   glsl->glsl_active_index = idx;
-   glUseProgram(glsl->prg[idx].id);
+   glUseProgram(id);
 }
 
 static unsigned gl_glsl_num(void *data)
@@ -1710,6 +1552,8 @@ const shader_backend_t gl_glsl_backend = {
    gl_glsl_init,
    gl_glsl_deinit,
    gl_glsl_set_params,
+   gl_glsl_set_uniform_parameter,
+   gl_glsl_compile_program,
    gl_glsl_use,
    gl_glsl_num,
    gl_glsl_filter_type,

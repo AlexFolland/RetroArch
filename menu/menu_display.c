@@ -37,6 +37,9 @@
 #include "../gfx/video_thread_wrapper.h"
 #endif
 
+
+uintptr_t menu_display_white_texture;
+
 static menu_display_ctx_driver_t *menu_display_ctx_drivers[] = {
 #ifdef HAVE_D3D
    &menu_display_ctx_d3d,
@@ -129,6 +132,7 @@ static void menu_display_timedate(void *data)
 bool menu_display_ctl(enum menu_display_ctl_state state, void *data)
 {
    unsigned width, height;
+   static gfx_coord_array_t menu_disp_ca;
    static unsigned menu_display_framebuf_width      = 0;
    static unsigned menu_display_framebuf_height     = 0;
    static size_t menu_display_framebuf_pitch        = 0;
@@ -199,6 +203,7 @@ bool menu_display_ctl(enum menu_display_ctl_state state, void *data)
       case MENU_DISPLAY_CTL_DEINIT:
          if (menu_display_msg_queue)
             msg_queue_free(menu_display_msg_queue);
+         gfx_coord_array_free(&menu_disp_ca);
          menu_display_msg_queue       = NULL;
          menu_display_msg_force       = false;
          menu_display_header_height   = 0;
@@ -209,6 +214,18 @@ bool menu_display_ctl(enum menu_display_ctl_state state, void *data)
          break;
       case MENU_DISPLAY_CTL_INIT:
          retro_assert(menu_display_msg_queue = msg_queue_new(8));
+         menu_disp_ca.allocated     =  0;
+         break;
+      case MENU_DISPLAY_CTL_COORDS_ARRAY_RESET:
+         menu_disp_ca.coords.vertices = 0;
+         break;
+      case MENU_DISPLAY_CTL_COORDS_ARRAY_GET:
+         {
+            void **ptr = (void**)data;
+            if (!ptr)
+               return false;
+            *ptr = &menu_disp_ca;
+         }
          break;
       case MENU_DISPLAY_CTL_SET_STUB_DRAW_FRAME:
          break;
@@ -455,18 +472,73 @@ bool menu_display_ctl(enum menu_display_ctl_state state, void *data)
       case MENU_DISPLAY_CTL_CLEAR_COLOR:
          if (!menu_disp || !menu_disp->clear_color)
             return false;
-         menu_disp->clear_color(data);
+         menu_disp->clear_color((menu_display_ctx_clearcolor_t*)data);
          break;
       case MENU_DISPLAY_CTL_DRAW:
-         if (!menu_disp || !menu_disp->draw)
-            return false;
-         menu_disp->draw(data);
+         {
+            menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
+            if (!menu_disp || !draw || !menu_disp->draw)
+               return false;
+            /* TODO - edge case */
+            if (draw->height <= 0)
+               draw->height = 1;
+
+            menu_disp->draw(draw);
+         }
          break;
       case MENU_DISPLAY_CTL_DRAW_BG:
-         if (!menu_disp || !menu_disp->draw_bg)
-            return false;
+         {
+            struct gfx_coords coords;
+            const float *new_vertex       = NULL;
+            const float *new_tex_coord    = NULL;
+            menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
+            if (!menu_disp || !draw)
+               return false;
 
-         menu_disp->draw_bg(data);
+            new_vertex           = draw->vertex;
+            new_tex_coord        = draw->tex_coord;
+
+            if (!new_vertex)
+               new_vertex        = menu_disp->get_default_vertices();
+            if (!new_tex_coord)
+               new_tex_coord     = menu_disp->get_default_tex_coords();
+
+            coords.vertices      = draw->vertex_count;
+            coords.vertex        = new_vertex;
+            coords.tex_coord     = new_tex_coord;
+            coords.lut_tex_coord = new_tex_coord;
+            coords.color         = (const float*)draw->color;
+
+            if (!draw->dont_replace_coords)
+               draw->coords      = &coords;
+
+            if (!draw->texture)
+               draw->texture     = menu_display_white_texture;
+
+            draw->matrix_data = (math_matrix_4x4*)menu_disp->get_default_mvp();
+
+            menu_display_ctl(MENU_DISPLAY_CTL_DRAW, draw);
+         }
+         break;
+      case MENU_DISPLAY_CTL_DRAW_GRADIENT:
+         {
+            menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
+            float bg[16] = {
+               1, 0, 0.1,     1,
+               1, 0.1, 0,     1,
+               0.05, 0, 0.05, 1,
+               0.05, 0, 0.05, 1 
+            };
+
+            bg[3] = bg[7] = bg[11] = bg[15] = draw->handle_alpha;
+
+            draw->color   = bg;
+            draw->texture = 0;
+            draw->x       = 0;
+            draw->y       = 0;
+
+            menu_display_ctl(MENU_DISPLAY_CTL_DRAW_BG, draw);
+         }
          break;
       case MENU_DISPLAY_CTL_ROTATE_Z:
          {
@@ -498,10 +570,10 @@ bool menu_display_ctl(enum menu_display_ctl_state state, void *data)
             if (!draw)
                return false;
 
-            if (!menu_disp || !menu_disp->get_tex_coords)
+            if (!menu_disp || !menu_disp->get_default_tex_coords)
                return false;
 
-            draw->ptr = menu_disp->get_tex_coords();
+            draw->ptr = menu_disp->get_default_tex_coords();
          }
          break;
       case MENU_DISPLAY_CTL_TIMEDATE:
@@ -529,7 +601,7 @@ void menu_display_handle_wallpaper_upload(void *task_data,
    free(img);
 }
 
-void menu_display_allocate_white_texture()
+void menu_display_allocate_white_texture(void)
 {
    struct texture_image ti;
    static const uint8_t white_data[] = { 0xff, 0xff, 0xff, 0xff };
@@ -540,4 +612,171 @@ void menu_display_allocate_white_texture()
 
    video_driver_texture_load(&ti,
          TEXTURE_FILTER_NEAREST, &menu_display_white_texture);
+}
+
+void menu_display_draw_cursor(
+      float *color, float cursor_size, uintptr_t texture,
+      float x, float y, unsigned width, unsigned height)
+{
+   menu_display_ctx_draw_t draw;
+   struct gfx_coords coords;
+
+   coords.vertices      = 4;
+   coords.vertex        = NULL;
+   coords.tex_coord     = NULL;
+   coords.lut_tex_coord = NULL;
+   coords.color         = (const float*)color;
+
+   menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
+
+   draw.x               = x - (cursor_size / 2);
+   draw.y               = (int)height - y - (cursor_size / 2);
+   draw.width           = cursor_size;
+   draw.height          = cursor_size;
+   draw.coords          = &coords;
+   draw.matrix_data     = NULL;
+   draw.texture         = texture;
+   draw.prim_type       = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
+
+   menu_display_ctl(MENU_DISPLAY_CTL_DRAW, &draw);
+   menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
+}
+
+static INLINE float menu_display_scalef(float val,
+      float oldmin, float oldmax, float newmin, float newmax)
+{
+   return (((val - oldmin) * (newmax - newmin)) / (oldmax - oldmin)) + newmin;
+}
+
+static INLINE float menu_display_randf(float min, float max)
+{
+   return (rand() * ((max - min) / RAND_MAX)) + min;
+}
+
+void menu_display_push_quad(
+      unsigned width, unsigned height,
+      const float *colors, int x1, int y1,
+      int x2, int y2)
+{
+   menu_display_ctx_coord_draw_t coord_draw;
+   gfx_coords_t coords;
+   float vertex[8];
+   gfx_coord_array_t *ca   = NULL;
+
+   menu_display_ctl(MENU_DISPLAY_CTL_COORDS_ARRAY_GET, &ca);
+
+   vertex[0]             = x1 / (float)width;
+   vertex[1]             = y1 / (float)height;
+   vertex[2]             = x2 / (float)width;
+   vertex[3]             = y1 / (float)height;
+   vertex[4]             = x1 / (float)width;
+   vertex[5]             = y2 / (float)height;
+   vertex[6]             = x2 / (float)width;
+   vertex[7]             = y2 / (float)height;
+
+   coord_draw.ptr        = NULL;
+
+   menu_display_ctl(MENU_DISPLAY_CTL_TEX_COORDS_GET, &coord_draw);
+
+   coords.color          = colors;
+   coords.vertex         = vertex;
+   coords.tex_coord      = coord_draw.ptr;
+   coords.lut_tex_coord  = coord_draw.ptr;
+   coords.vertices       = 3;
+
+   gfx_coord_array_append(ca, &coords, 3);
+
+   coords.color         += 4;
+   coords.vertex        += 2;
+   coords.tex_coord     += 2;
+   coords.lut_tex_coord += 2;
+
+   gfx_coord_array_append(ca, &coords, 3);
+}
+
+#define PARTICLES_COUNT            100
+
+void menu_display_snow(int width, int height)
+{
+   struct display_particle
+   {
+      float x, y;
+      float xspeed, yspeed;
+      float alpha;
+      bool alive;
+   };
+   static struct display_particle particles[PARTICLES_COUNT];
+   static bool initialized = false;
+   static int timeout      = 0;
+   unsigned i, max_gen     = 2;
+
+   if (!initialized)
+   {
+      memset(particles, 0, sizeof(particles));
+      initialized = true;
+   }
+
+   for (i = 0; i < PARTICLES_COUNT; ++i)
+   {
+      struct display_particle *p = (struct display_particle*)&particles[i];
+
+      if (!p)
+         return;
+
+      if (p->alive)
+      {
+         int16_t mouse_x  = menu_input_mouse_state(MENU_MOUSE_X_AXIS);
+
+         p->y            += p->yspeed;
+         p->x            += menu_display_scalef(mouse_x, 0, width, -0.3, 0.3);
+         p->x            += p->xspeed;
+
+         p->alive         = p->y >= 0 && p->y < height 
+            && p->x >= 0 && p->x < width;
+      }
+      else if (max_gen > 0 && timeout <= 0)
+      {
+         p->xspeed = menu_display_randf(-0.2, 0.2);
+         p->yspeed = menu_display_randf(1, 2);
+         p->y      = 0;
+         p->x      = rand() % width;
+         p->alpha  = (float)rand() / (float)RAND_MAX;
+         p->alive  = true;
+
+         max_gen--;
+      }
+   }
+
+   if (max_gen == 0)
+      timeout = 3;
+   else
+      timeout--;
+
+   for (i = 0; i < PARTICLES_COUNT; ++i)
+   {
+      unsigned j;
+      float alpha;
+      float colors[16];
+      struct display_particle *p = &particles[i];
+
+      if (!p)
+         return;
+
+      if (!p->alive)
+         continue;
+
+      alpha = menu_display_randf(0, 100) > 90 ? p->alpha/2 : p->alpha;
+
+      for (j = 0; j < 16; j++)
+      {
+         colors[j] = 1;
+         if (j == 3 || j == 7 || j == 11 || j == 15)
+            colors[j] = alpha;
+      }
+
+      menu_display_push_quad(width, height,
+            colors, p->x-2, p->y-2, p->x+2, p->y+2);
+
+      j++;
+   }
 }

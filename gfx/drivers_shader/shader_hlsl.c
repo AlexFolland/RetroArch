@@ -22,49 +22,9 @@
 #include "../d3d/d3d.h"
 #include "../../rewind.h"
 
-static const char *stock_hlsl_program =
-      "void main_vertex\n"
-      "(\n"
-      "  float4 position : POSITION,\n"
-      "  float4 color    : COLOR,\n"
-      "\n"
-      "  uniform float4x4 modelViewProj,\n"
-      "\n"
-      "  float4 texCoord : TEXCOORD0,\n"
-      "  out float4 oPosition : POSITION,\n"
-      "  out float4 oColor : COLOR,\n"
-      "  out float2 otexCoord : TEXCOORD\n"
-      ")\n"
-      "{\n"
-      "  oPosition = mul(modelViewProj, position);\n"
-	   "  oColor = color;\n"
-      "  otexCoord = texCoord;\n"
-      "}\n"
-      "\n"
-      "struct output\n"
-      "{\n"
-      "  float4 color: COLOR;\n"
-      "};\n"
-      "\n"
-      "struct input\n"
-      "{\n"
-      "  float2 video_size;\n"
-      "  float2 texture_size;\n"
-      "  float2 output_size;\n"
-	   "  float frame_count;\n"
-	   "  float frame_direction;\n"
-	   "  float frame_rotation;\n"
-      "};\n"
-      "\n"
-      "output main_fragment(float2 texCoord : TEXCOORD0,\n" 
-      "uniform sampler2D decal : TEXUNIT0, uniform input IN)\n"
-      "{\n"
-      "  output OUT;\n"
-      "  OUT.color = tex2D(decal, texCoord);\n"
-      "  return OUT;\n"
-      "}\n";
+#include "../drivers/d3d_shaders/opaque.hlsl.d3d9.h"
 
-struct shader_program_data 
+struct shader_program_hlsl_data 
 {
    LPDIRECT3DVERTEXSHADER vprg;
    LPDIRECT3DPIXELSHADER fprg;
@@ -91,7 +51,7 @@ typedef struct hlsl_shader_data hlsl_shader_data_t;
 struct hlsl_shader_data
 {
    d3d_video_t *d3d;
-   shader_program_data_t prg[RARCH_HLSL_MAX_SHADERS];
+   struct shader_program_hlsl_data prg[RARCH_HLSL_MAX_SHADERS];
    unsigned active_idx;
    struct video_shader *cg_shader;
 };
@@ -103,9 +63,14 @@ void hlsl_set_proj_matrix(void *data, XMMATRIX rotation_value)
       hlsl_data->prg[hlsl_data->active_idx].mvp_val = rotation_value;
 }
 
-static void hlsl_uniform_set_parameter(void *data, shader_program_data_t *shader_data, void *uniform_data)
+static void hlsl_set_uniform_parameter(
+      void *data,
+      struct uniform_info *param,
+      void *uniform_data)
 {
-   struct uniform_info *param = (struct uniform_info*)data;
+   hlsl_shader_data_t *hlsl = (hlsl_shader_data_t*)data;
+
+   (void)hlsl;
 
    if (!param || !param->enabled)
       return;
@@ -113,28 +78,28 @@ static void hlsl_uniform_set_parameter(void *data, shader_program_data_t *shader
    switch (param->type)
    {
       case UNIFORM_1F:
-         /* Unimplemented - Cg limitation */
+         /* Unimplemented  */
          break;
       case UNIFORM_2F:
-         /* Unimplemented - Cg limitation */
+         /* Unimplemented  */
          break;
       case UNIFORM_3F:
-         /* Unimplemented - Cg limitation */
+         /* Unimplemented  */
          break;
       case UNIFORM_4F:
-         /* Unimplemented - Cg limitation */
+         /* Unimplemented  */
          break;
       case UNIFORM_1FV:
-         /* Unimplemented - Cg limitation */
+         /* Unimplemented  */
          break;
       case UNIFORM_2FV:
-         /* Unimplemented - Cg limitation */
+         /* Unimplemented  */
          break;
       case UNIFORM_3FV:
-         /* Unimplemented - Cg limitation */
+         /* Unimplemented  */
          break;
       case UNIFORM_4FV:
-         /* Unimplemented - Cg limitation */
+         /* Unimplemented  */
          break;
       case UNIFORM_1I:
          /* Unimplemented - Cg limitation */
@@ -194,17 +159,21 @@ static void hlsl_set_params(void *data, void *shader_data,
 static bool hlsl_compile_program(
       void *data,
       unsigned idx,
-      shader_program_data_t *program,
+      void *program_data,
       struct shader_program_info *program_info)
 {
    hlsl_shader_data_t *hlsl = (hlsl_shader_data_t*)data;
    d3d_video_t *d3d = (d3d_video_t*)hlsl->d3d;
+   struct shader_program_hlsl_data *program  = (struct shader_program_hlsl_data*)program_data;
    LPDIRECT3DDEVICE d3d_device_ptr = (LPDIRECT3DDEVICE)d3d->dev;
    HRESULT ret, ret_fp, ret_vp;
    ID3DXBuffer *listing_f = NULL;
    ID3DXBuffer *listing_v = NULL;
    ID3DXBuffer *code_f = NULL;
    ID3DXBuffer *code_v = NULL;
+
+   if (!program)
+      program = &hlsl->prg[idx];
 
    if (program_info->is_file)
    {
@@ -471,7 +440,7 @@ static void hlsl_deinit(void *data)
       free(hlsl_data);
 }
 
-static void hlsl_use(void *data, void *shader_data, unsigned idx)
+static void hlsl_use(void *data, void *shader_data, unsigned idx, bool set_active)
 {
    d3d_video_t *d3d = (d3d_video_t*)data;
    hlsl_shader_data_t *hlsl_data = (hlsl_shader_data_t*)shader_data;
@@ -479,7 +448,11 @@ static void hlsl_use(void *data, void *shader_data, unsigned idx)
 
    if (hlsl_data && hlsl_data->prg[idx].vprg && hlsl_data->prg[idx].fprg)
    {
-      hlsl_data->active_idx = idx;
+      if (set_active)
+      {
+         hlsl_data->active_idx = idx;
+      }
+
       d3d_set_vertex_shader(d3dr, idx, hlsl_data->prg[idx].vprg);
 #ifdef _XBOX
       D3DDevice_SetPixelShader(d3dr, hlsl_data->prg[idx].fprg);
@@ -555,6 +528,7 @@ const shader_backend_t hlsl_backend = {
    hlsl_init,
    hlsl_deinit,
    hlsl_set_params,
+   hlsl_set_uniform_parameter,
    hlsl_use,
    hlsl_num,
    hlsl_filter_type,

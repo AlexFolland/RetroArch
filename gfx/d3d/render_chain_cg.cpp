@@ -86,30 +86,7 @@ typedef struct cg_renderchain
    CGcontext cgCtx;
 } cg_renderchain_t;
 
-
-static const char *stock_cg_d3d9_program =
-    "void main_vertex"
-    "("
-    "	float4 position : POSITION,"
-    "	float2 texCoord : TEXCOORD0,"
-    "  float4 color : COLOR,"
-    ""
-    "  uniform float4x4 modelViewProj,"
-    ""
-    "	out float4 oPosition : POSITION,"
-    "	out float2 otexCoord : TEXCOORD0,"
-    "  out float4 oColor : COLOR"
-    ")"
-    "{"
-    "	oPosition = mul(modelViewProj, position);"
-    "	otexCoord = texCoord;"
-    "  oColor = color;"
-    "}"
-    ""
-    "float4 main_fragment(in float4 color : COLOR, float2 tex : TEXCOORD0, uniform sampler2D s0 : TEXUNIT0) : COLOR"
-    "{"
-    "   return color * tex2D(s0, tex);"
-    "}";
+#include "../drivers/d3d_shaders/opaque.cg.d3d9.h"
 
 static INLINE bool validate_param_name(const char *name)
 {
@@ -168,16 +145,11 @@ static INLINE CGparameter d3d9_cg_find_param_from_semantic(
    return NULL;
 }
 
-#define CG_D3D_SET_LISTING(cg_data, type) \
-{ \
-   const char *list = cgGetLastListing(cg_data->cgCtx); \
-   if (list) \
-      listing_##type = strdup(list); \
-}
-
 static bool d3d9_cg_load_program(void *data,
       void *fragment_data, void *vertex_data, const char *prog, bool path_is_file)
 {
+   bool ret                   = true;
+   const char *list           = NULL;
    char *listing_f            = NULL;
    char *listing_v            = NULL;
    CGprogram *fPrg            = (CGprogram*)fragment_data;
@@ -192,23 +164,26 @@ static bool d3d9_cg_load_program(void *data,
    RARCH_LOG("[D3D Cg]: Fragment profile: %s\n", cgGetProfileString(fragment_profile));
 
    if (path_is_file && !string_is_empty(prog))
-   {
       *fPrg = cgCreateProgramFromFile(cg_data->cgCtx, CG_SOURCE,
             prog, fragment_profile, "main_fragment", fragment_opts);
-      CG_D3D_SET_LISTING(cg_data, f);
-      *vPrg = cgCreateProgramFromFile(cg_data->cgCtx, CG_SOURCE,
-            prog, vertex_profile, "main_vertex", vertex_opts);
-      CG_D3D_SET_LISTING(cg_data, v);
-   }
    else
-   {
       *fPrg = cgCreateProgram(cg_data->cgCtx, CG_SOURCE, stock_cg_d3d9_program,
             fragment_profile, "main_fragment", fragment_opts);
-      CG_D3D_SET_LISTING(cg_data, f);
+
+   list = cgGetLastListing(cg_data->cgCtx);
+   if (list)
+      listing_f = strdup(list);
+
+   if (path_is_file && !string_is_empty(prog))
+      *vPrg = cgCreateProgramFromFile(cg_data->cgCtx, CG_SOURCE,
+            prog, vertex_profile, "main_vertex", vertex_opts);
+   else
       *vPrg = cgCreateProgram(cg_data->cgCtx, CG_SOURCE, stock_cg_d3d9_program,
             vertex_profile, "main_vertex", vertex_opts);
-      CG_D3D_SET_LISTING(cg_data, v);
-   }
+
+   list = cgGetLastListing(cg_data->cgCtx);
+   if (list)
+      listing_v = strdup(list);
 
    if (!fPrg || !vPrg)
    {
@@ -217,22 +192,23 @@ static bool d3d9_cg_load_program(void *data,
          RARCH_ERR("Fragment:\n%s\n", listing_f);
       else if (listing_v)
          RARCH_ERR("Vertex:\n%s\n", listing_v);
-      free(listing_f);
-      free(listing_v);
-      return false;
+      ret = false;
+      goto end;
    }
 
    cgD3D9LoadProgram(*fPrg, true, 0);
    cgD3D9LoadProgram(*vPrg, true, 0);
+
+end:
    free(listing_f);
    free(listing_v);
-   return true;
+   return ret;
 }
 
-static INLINE void renderchain_set_shaders(void *data, CGprogram *fPrg, CGprogram *vPrg)
+static INLINE void renderchain_set_shaders(CGprogram frag, CGprogram vert)
 {
-   cgD3D9BindProgram(*fPrg);
-   cgD3D9BindProgram(*vPrg);
+   cgD3D9BindProgram(frag);
+   cgD3D9BindProgram(vert);
 }
 
 static void renderchain_set_shader_mvp(cg_renderchain_t *chain, void *shader_data, void *matrix_data)
@@ -884,7 +860,7 @@ static bool cg_d3d9_renderchain_init(void *data,
    if (!d3d9_cg_load_program(chain, &chain->fStock, &chain->vStock, NULL, false))
       return false;
 
-   renderchain_set_shaders(chain, &chain->fStock, &chain->vStock);
+   renderchain_set_shaders(chain->fStock, chain->vStock);
 
    return true;
 }
@@ -1299,7 +1275,7 @@ static void renderchain_render_pass(
    if (!chain)
       return;
    
-   renderchain_set_shaders(chain, &pass->fPrg, &pass->vPrg);
+   renderchain_set_shaders(pass->fPrg, pass->vPrg);
 
    d3d_set_texture(chain->dev, 0, pass->tex);
    d3d_set_sampler_minfilter(chain->dev, 0,
@@ -1467,7 +1443,7 @@ static bool cg_d3d9_renderchain_render(
    back_buffer->Release();
 
    renderchain_end_render(chain);
-   renderchain_set_shaders(chain, &chain->fStock, &chain->vStock);
+   renderchain_set_shaders(chain->fStock, chain->vStock);
    renderchain_set_mvp(chain, chain->vStock, chain->final_viewport->Width,
          chain->final_viewport->Height, 0);
 

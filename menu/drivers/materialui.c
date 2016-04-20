@@ -80,6 +80,11 @@ typedef struct mui_handle
    unsigned glyph_width;
    char box_message[PATH_MAX_LENGTH];
 
+   struct
+   {
+      int size;
+   } cursor;
+
    struct 
    {
       struct
@@ -108,6 +113,35 @@ typedef struct mui_handle
    float scroll_y;
 } mui_handle_t;
 
+static const char *mui_texture_path(unsigned id)
+{
+   switch (id)
+   {
+      case MUI_TEXTURE_POINTER:
+         return "pointer.png";
+      case MUI_TEXTURE_BACK:
+         return "back.png";
+      case MUI_TEXTURE_SWITCH_ON:
+         return "on.png";
+      case MUI_TEXTURE_SWITCH_OFF:
+         return "off.png";
+      case MUI_TEXTURE_TAB_MAIN_ACTIVE:
+         return "main_tab_active.png";
+      case MUI_TEXTURE_TAB_PLAYLISTS_ACTIVE:
+         return "playlists_tab_active.png";
+      case MUI_TEXTURE_TAB_SETTINGS_ACTIVE:
+         return "settings_tab_active.png";
+      case MUI_TEXTURE_TAB_MAIN_PASSIVE:
+         return "main_tab_passive.png";
+      case MUI_TEXTURE_TAB_PLAYLISTS_PASSIVE:
+         return "playlists_tab_passive.png";
+      case MUI_TEXTURE_TAB_SETTINGS_PASSIVE:
+         return "settings_tab_passive.png";
+   }
+
+   return NULL;
+}
+
 static void mui_context_reset_textures(mui_handle_t *mui,
       const char *iconpath)
 {
@@ -117,50 +151,10 @@ static void mui_context_reset_textures(mui_handle_t *mui,
    {
       struct texture_image ti     = {0};
       char path[PATH_MAX_LENGTH]  = {0};
+      const char *texture_path    = mui_texture_path(i);
 
-      switch(i)
-      {
-         case MUI_TEXTURE_POINTER:
-            fill_pathname_join(path, iconpath,
-                  "pointer.png", sizeof(path));
-            break;
-         case MUI_TEXTURE_BACK:
-            fill_pathname_join(path, iconpath,
-                  "back.png", sizeof(path));
-            break;
-         case MUI_TEXTURE_SWITCH_ON:
-            fill_pathname_join(path, iconpath,
-                  "on.png", sizeof(path));
-            break;
-         case MUI_TEXTURE_SWITCH_OFF:
-            fill_pathname_join(path, iconpath,
-                  "off.png", sizeof(path));
-            break;
-         case MUI_TEXTURE_TAB_MAIN_ACTIVE:
-            fill_pathname_join(path, iconpath,
-                  "main_tab_active.png", sizeof(path));
-            break;
-         case MUI_TEXTURE_TAB_PLAYLISTS_ACTIVE:
-            fill_pathname_join(path, iconpath,
-                  "playlists_tab_active.png", sizeof(path));
-            break;
-         case MUI_TEXTURE_TAB_SETTINGS_ACTIVE:
-            fill_pathname_join(path, iconpath,
-                  "settings_tab_active.png", sizeof(path));
-            break;
-         case MUI_TEXTURE_TAB_MAIN_PASSIVE:
-            fill_pathname_join(path, iconpath,
-                  "main_tab_passive.png", sizeof(path));
-            break;
-         case MUI_TEXTURE_TAB_PLAYLISTS_PASSIVE:
-            fill_pathname_join(path, iconpath,
-                  "playlists_tab_passive.png", sizeof(path));
-            break;
-         case MUI_TEXTURE_TAB_SETTINGS_PASSIVE:
-            fill_pathname_join(path, iconpath,
-                  "settings_tab_passive.png", sizeof(path));
-            break;
-      }
+      if (texture_path != NULL)
+         fill_pathname_join(path, iconpath, texture_path, sizeof(path));
 
       if (string_is_empty(path) || !path_file_exists(path))
          continue;
@@ -652,34 +646,6 @@ static void mui_render_menu_list(mui_handle_t *mui,
    }
 }
 
-static void mui_draw_cursor(mui_handle_t *mui,
-      float *color,
-      float x, float y, unsigned width, unsigned height)
-{
-   menu_display_ctx_draw_t draw;
-   struct gfx_coords coords;
-
-   coords.vertices      = 4;
-   coords.vertex        = NULL;
-   coords.tex_coord     = NULL;
-   coords.lut_tex_coord = NULL;
-   coords.color         = (const float*)color;
-
-   menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
-
-   draw.x           = x - 32;
-   draw.y           = (int)height - y - 32;
-   draw.width       = 64;
-   draw.height      = 64;
-   draw.coords      = &coords;
-   draw.matrix_data = NULL;
-   draw.texture     = mui->textures.list[MUI_TEXTURE_POINTER];
-   draw.prim_type   = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
-
-   menu_display_ctl(MENU_DISPLAY_CTL_DRAW, &draw);
-
-   menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
-}
 
 static size_t mui_list_get_size(void *data, enum menu_list_type type)
 {
@@ -741,6 +707,8 @@ static int mui_get_core_title(char *s, size_t len)
 static void mui_draw_bg(menu_display_ctx_draw_t *draw)
 {
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
+   draw->x              = 0;
+   draw->y              = 0;
    menu_display_ctl(MENU_DISPLAY_CTL_DRAW_BG, draw);
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
 }
@@ -1025,7 +993,14 @@ static void mui_frame(void *data)
       int16_t mouse_x = menu_input_mouse_state(MENU_MOUSE_X_AXIS);
       int16_t mouse_y = menu_input_mouse_state(MENU_MOUSE_Y_AXIS);
 
-      mui_draw_cursor(mui, &white_bg[0], mouse_x, mouse_y, width, height);
+      menu_display_draw_cursor(
+            &white_bg[0],
+            mui->cursor.size,
+            mui->textures.list[MUI_TEXTURE_POINTER],
+            mouse_x,
+            mouse_y,
+            width,
+            height);
    }
 
    menu_display_ctl(MENU_DISPLAY_CTL_RESTORE_CLEAR_COLOR, NULL);
@@ -1124,6 +1099,7 @@ static void *mui_init(void **userdata)
    mui_layout(mui);
    menu_display_allocate_white_texture();
 
+   mui->cursor.size  = 64.0;
 
    return menu;
 error:

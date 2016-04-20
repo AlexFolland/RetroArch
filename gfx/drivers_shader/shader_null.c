@@ -74,6 +74,13 @@ static void shader_null_set_params(void *data, void *shader_data,
 {
 }
 
+static void shader_null_set_uniform_parameter(
+      void *data,
+      struct uniform_info *param,
+      void *uniform_data)
+{
+}
+
 static bool shader_null_set_mvp(void *data, void *shader_data, const math_matrix_4x4 *mat)
 {
 #ifdef HAVE_OPENGL
@@ -85,24 +92,22 @@ static bool shader_null_set_mvp(void *data, void *shader_data, const math_matrix
    return false;
 }
 
-static bool shader_null_set_coords(void *handle_data, void *shader_data, const void *data)
+static bool shader_null_set_coords(void *handle_data, void *shader_data, const struct gfx_coords *coords)
 {
 #ifdef HAVE_OPENGL
 #ifndef NO_GL_FF_VERTEX
    if (string_is_equal(video_driver_get_ident(), "gl"))
-   {
-      const struct gfx_coords *coords = (const struct gfx_coords*)data;
       gl_ff_vertex(coords);
-   }
 #endif
 #endif
    return false;
 }
 
-static void shader_null_use(void *data, void *shader_data, unsigned idx)
+static void shader_null_use(void *data, void *shader_data, unsigned idx, bool set_active)
 {
    (void)data;
    (void)idx;
+   (void)set_active;
 }
 
 static unsigned shader_null_num(void *data)
@@ -152,10 +157,21 @@ static struct video_shader *shader_null_get_current_shader(void *data)
    return NULL;
 }
 
+static bool shader_null_compile_program(
+      void *data,
+      unsigned idx,
+      void *program_data,
+      struct shader_program_info *program_info)
+{
+   return true;
+}
+
 const shader_backend_t shader_null_backend = {
    shader_null_init,
    shader_null_deinit,
    shader_null_set_params,
+   shader_null_set_uniform_parameter,
+   shader_null_compile_program,
    shader_null_use,
    shader_null_num,
    shader_null_filter_type,

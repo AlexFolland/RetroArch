@@ -465,11 +465,11 @@ const char *menu_hash_to_str_nl(uint32_t hash)
       case MENU_LABEL_VALUE_RDB_ENTRY_START_CONTENT:
          return "Content Opstarten";
       case MENU_LABEL_VALUE_DISK_OPTIONS:
-         return "Core Disk Opties";
+         return "Disk Beheer";
       case MENU_LABEL_VALUE_CORE_OPTIONS:
-         return "Core Opties";
+         return "Opties";
       case MENU_LABEL_VALUE_CORE_CHEAT_OPTIONS:
-         return "Core Cheat Opties";
+         return "Cheats";
       case MENU_LABEL_VALUE_CHEAT_FILE_LOAD:
          return "Cheat Bestand Laden";
       case MENU_LABEL_VALUE_CHEAT_FILE_SAVE_AS:
@@ -513,7 +513,7 @@ const char *menu_hash_to_str_nl(uint32_t hash)
       case MENU_LABEL_VALUE_SAVE_NEW_CONFIG:
          return "Nieuwe configuratie opslaan";
       case MENU_LABEL_VALUE_RESTART_CONTENT:
-         return "Herstart Content";
+         return "Herstart";
       case MENU_LABEL_VALUE_CORE_UPDATER_LIST:
          return "Core Updater";
       case MENU_LABEL_VALUE_CORE_UPDATER_BUILDBOT_URL:
@@ -541,7 +541,7 @@ const char *menu_hash_to_str_nl(uint32_t hash)
       case MENU_LABEL_VALUE_LOAD_CONTENT:
          return "Selecteer bestand";
       case MENU_LABEL_VALUE_CLOSE_CONTENT:
-         return "Content afsluiten";
+         return "Afsluiten";
       case MENU_LABEL_VALUE_MANAGEMENT:
          return "Database";
       case MENU_LABEL_VALUE_SAVE_STATE:
@@ -549,7 +549,7 @@ const char *menu_hash_to_str_nl(uint32_t hash)
       case MENU_LABEL_VALUE_LOAD_STATE:
          return "Laad State";
       case MENU_LABEL_VALUE_RESUME_CONTENT:
-         return "Hervatten van Content";
+         return "Hervatten";
       case MENU_LABEL_VALUE_INPUT_DRIVER:
          return "Input Driver";
       case MENU_LABEL_VALUE_AUDIO_DRIVER:
@@ -585,9 +585,9 @@ const char *menu_hash_to_str_nl(uint32_t hash)
       case MENU_LABEL_VALUE_DYNAMIC_WALLPAPER:
          return "Dynamic Wallpaper";
       case MENU_LABEL_VALUE_CORE_INPUT_REMAPPING_OPTIONS:
-         return "Core Invoer Opties";
+         return "Besturing";
       case MENU_LABEL_VALUE_SHADER_OPTIONS:
-         return "Shader Opties";
+         return "Shaders";
       case MENU_LABEL_VALUE_VIDEO_SHADER_PARAMETERS:
          return "Voorbeeldweergave Shader Parameters";
       case MENU_LABEL_VALUE_VIDEO_SHADER_PRESET_PARAMETERS:

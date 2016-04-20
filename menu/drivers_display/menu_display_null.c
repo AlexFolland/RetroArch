@@ -42,7 +42,7 @@ static void menu_display_null_draw(void *data)
    (void)data;
 }
 
-static void menu_display_null_draw_bg(void *data)
+static void menu_display_null_viewport(void *data)
 {
    (void)data;
 }
@@ -51,15 +51,9 @@ static void menu_display_null_restore_clear_color(void)
 {
 }
 
-static void menu_display_null_clear_color(void *data)
+static void menu_display_null_clear_color(menu_display_ctx_clearcolor_t *clearcolor)
 {
-   (void)data;
-}
-
-static const float *menu_display_null_get_tex_coords(void)
-{
-   static float floats[1] = {1.00f};
-   return &floats[0];
+   (void)clearcolor;
 }
 
 static bool menu_display_null_font_init_first(
@@ -69,15 +63,28 @@ static bool menu_display_null_font_init_first(
    return true;
 }
 
+static const float *menu_display_null_get_default_vertices(void)
+{
+   static float dummy[16] = {0.0f};
+   return &dummy[0];
+}
+
+static const float *menu_display_null_get_default_tex_coords(void)
+{
+   static float dummy[16] = {0.0f};
+   return &dummy[0];
+}
+
 menu_display_ctx_driver_t menu_display_ctx_null = {
    menu_display_null_draw,
-   menu_display_null_draw_bg,
+   menu_display_null_viewport,
    menu_display_null_blend_begin,
    menu_display_null_blend_end,
    menu_display_null_restore_clear_color,
    menu_display_null_clear_color,
    menu_display_null_get_default_mvp,
-   menu_display_null_get_tex_coords,
+   menu_display_null_get_default_vertices,
+   menu_display_null_get_default_tex_coords,
    menu_display_null_font_init_first,
    MENU_VIDEO_DRIVER_GENERIC,
    "menu_display_null",

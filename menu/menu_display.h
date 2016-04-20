@@ -75,9 +75,12 @@ enum menu_display_ctl_state
    MENU_DISPLAY_CTL_CLEAR_COLOR,
    MENU_DISPLAY_CTL_DRAW,
    MENU_DISPLAY_CTL_DRAW_BG,
+   MENU_DISPLAY_CTL_DRAW_GRADIENT,
    MENU_DISPLAY_CTL_ROTATE_Z,
    MENU_DISPLAY_CTL_TEX_COORDS_GET,
-   MENU_DISPLAY_CTL_TIMEDATE
+   MENU_DISPLAY_CTL_TIMEDATE,
+   MENU_DISPLAY_CTL_COORDS_ARRAY_RESET,
+   MENU_DISPLAY_CTL_COORDS_ARRAY_GET
 };
 
 enum menu_display_prim_type
@@ -109,6 +112,7 @@ typedef struct menu_display_ctx_draw
    float y;
    unsigned width;
    unsigned height;
+   bool dont_replace_coords;
    struct gfx_coords *coords;
    void *matrix_data;
    uintptr_t texture;
@@ -146,13 +150,14 @@ typedef struct menu_display_ctx_datetime
 typedef struct menu_display_ctx_driver
 {
    void (*draw)(void *data);
-   void (*draw_bg)(void *data);
+   void (*viewport)(void *data);
    void (*blend_begin)(void);
    void (*blend_end)(void);
    void (*restore_clear_color)(void);
-   void (*clear_color)(void *data);
+   void (*clear_color)(menu_display_ctx_clearcolor_t *clearcolor);
    void *(*get_default_mvp)(void);
-   const float *(*get_tex_coords)(void);
+   const float *(*get_default_vertices)(void);
+   const float *(*get_default_tex_coords)(void);
    bool (*font_init_first)(
          void **font_handle, void *video_data,
          const char *font_path, float font_size);
@@ -173,8 +178,20 @@ bool menu_display_ctl(enum menu_display_ctl_state state, void *data);
 void menu_display_handle_wallpaper_upload(void *task_data,
       void *user_data, const char *err);
 
-uintptr_t menu_display_white_texture;
-void menu_display_allocate_white_texture();
+void menu_display_push_quad( 
+      unsigned width, unsigned height,
+      const float *colors, int x1, int y1,
+      int x2, int y2);
+
+void menu_display_snow(int width, int height);
+
+void menu_display_allocate_white_texture(void);
+
+void menu_display_draw_cursor(
+      float *color, float cursor_size, uintptr_t texture,
+      float x, float y, unsigned width, unsigned height);
+
+extern uintptr_t menu_display_white_texture;
 
 extern menu_display_ctx_driver_t menu_display_ctx_gl;
 extern menu_display_ctx_driver_t menu_display_ctx_vulkan;

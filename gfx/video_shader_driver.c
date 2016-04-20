@@ -34,6 +34,43 @@ static const shader_backend_t *shader_ctx_drivers[] = {
    NULL
 };
 
+static const shader_backend_t *video_shader_set_backend(enum rarch_shader_type type,
+      bool core_context_inited)
+{
+   switch (type)
+   {
+      case RARCH_SHADER_CG:
+#ifdef HAVE_CG
+         if (core_context_inited)
+         {
+            RARCH_ERR("[Shader driver]: Cg cannot be used with core GL context. Trying to fall back to GLSL...\n");
+#ifdef HAVE_GLSL
+            return &gl_glsl_backend;
+#endif
+         }
+         else
+         {
+            RARCH_LOG("[Shader driver]: Using Cg shader backend.\n");
+            return &gl_cg_backend;
+         }
+#else
+         break;
+#endif
+      case RARCH_SHADER_GLSL:
+#ifdef HAVE_GLSL
+         RARCH_LOG("[Shader driver]: Using GLSL shader backend.\n");
+         return &gl_glsl_backend;
+#else
+         break;
+#endif
+      case RARCH_SHADER_NONE:
+      default:
+         break;
+   }
+
+   return NULL;
+}
+
 bool video_shader_driver_ctl(enum video_shader_driver_ctl_state state, void *data)
 {
    static const shader_backend_t *current_shader = NULL;
@@ -95,6 +132,16 @@ bool video_shader_driver_ctl(enum video_shader_driver_ctl_state state, void *dat
          shader_data    = NULL;
          current_shader = NULL;
          break;
+      case SHADER_CTL_SET_PARAMETER:
+         {
+            struct uniform_info *param = (struct uniform_info*)data;
+
+            if (!current_shader || !param)
+               return false;
+            current_shader->set_uniform_parameter(shader_data,
+                  param, NULL);
+         }
+         break;
       case SHADER_CTL_SET_PARAMS:
          {
             video_shader_ctx_params_t *params = 
@@ -137,7 +184,13 @@ bool video_shader_driver_ctl(enum video_shader_driver_ctl_state state, void *dat
             void *tmp = NULL;
 
             if (!init->shader || !init->shader->init)
-               return false;
+            {
+               init->shader = video_shader_set_backend(init->shader_type,
+                     init->gl.core_context_enabled);
+               
+               if (!init->shader)
+                  return false;
+            }
 
             tmp = init->shader->init(init->data, init->path);
 
@@ -171,7 +224,7 @@ bool video_shader_driver_ctl(enum video_shader_driver_ctl_state state, void *dat
             if (!current_shader || !current_shader->set_coords)
                return false;
             if (!current_shader->set_coords(coords->handle_data,
-                  shader_data, coords->data))
+                  shader_data, (const struct gfx_coords*)coords->data))
                return false;
          }
          break;
@@ -223,12 +276,21 @@ bool video_shader_driver_ctl(enum video_shader_driver_ctl_state state, void *dat
                return false;
          }
          break;
+      case SHADER_CTL_COMPILE_PROGRAM:
+         {
+            struct shader_program_info *program_info = (struct shader_program_info*)data;
+            if (!current_shader || !program_info)
+               return false;
+            return current_shader->compile_program(program_info->data,
+                  program_info->idx, NULL, program_info);
+         }
+         break;
       case SHADER_CTL_USE:
          {
             video_shader_ctx_info_t *shader_info = (video_shader_ctx_info_t*)data;
             if (!current_shader || !shader_info)
                return false;
-            current_shader->use(shader_info->data, shader_data, shader_info->idx);
+            current_shader->use(shader_info->data, shader_data, shader_info->idx, shader_info->set_active);
          }
          break;
       case SHADER_CTL_WRAP_TYPE:

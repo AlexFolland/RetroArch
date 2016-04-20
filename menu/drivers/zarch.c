@@ -55,7 +55,6 @@
 
 #define ZUI_FG_NORMAL         (~0)
 #define ZUI_ITEM_SIZE_PX      54
-#define NPARTICLES            100
 
 enum zarch_zui_input_state
 {
@@ -116,8 +115,6 @@ typedef struct zarch_handle
       unsigned hot;
    } item;
 
-   gfx_coord_array_t ca;
-
    struct
    {
       int    wheel;
@@ -131,7 +128,6 @@ typedef struct zarch_handle
    struct
    {
       menu_texture_item bg;
-      menu_texture_item white;
    } textures;
 
    /* LAY_ROOT's "Recent" */
@@ -168,13 +164,6 @@ struct zui_tabbed
    bool inited;
 };
 
-struct zui_part
-{
-   float x, y;
-   float xspeed, yspeed;
-   float alpha;
-   bool alive;
-};
 
 static enum zarch_layout_type zarch_layout;
 
@@ -320,133 +309,6 @@ static void zarch_zui_draw_text(zui_t *zui,
    video_driver_set_osd_msg(text, &params, zui->fb_buf);
 }
 
-static void zarch_zui_push_quad(unsigned width, unsigned height,
-      const float *colors, gfx_coord_array_t *ca, int x1, int y1,
-      int x2, int y2)
-{
-   menu_display_ctx_coord_draw_t coord_draw;
-   gfx_coords_t coords;
-   float vertex[8];
-
-   vertex[0] = x1 / (float)width;
-   vertex[1] = y1 / (float)height;
-   vertex[2] = x2 / (float)width;
-   vertex[3] = y1 / (float)height;
-   vertex[4] = x1 / (float)width;
-   vertex[5] = y2 / (float)height;
-   vertex[6] = x2 / (float)width;
-   vertex[7] = y2 / (float)height;
-
-   coord_draw.ptr       = NULL;
-
-   menu_display_ctl(MENU_DISPLAY_CTL_TEX_COORDS_GET, &coord_draw);
-
-   coords.color         = colors;
-   coords.vertex        = vertex;
-   coords.tex_coord     = coord_draw.ptr;
-   coords.lut_tex_coord = coord_draw.ptr;
-   coords.vertices      = 3;
-
-   gfx_coord_array_append(ca, &coords, 3);
-
-   coords.color         += 4;
-   coords.vertex        += 2;
-   coords.tex_coord     += 2;
-   coords.lut_tex_coord += 2;
-
-   gfx_coord_array_append(ca, &coords, 3);
-}
-
-static float zarch_zui_randf(float min, float max)
-{
-   return (rand() * ((max - min) / RAND_MAX)) + min;
-}
-
-static float zarch_zui_scalef(float val,
-      float oldmin, float oldmax, float newmin, float newmax)
-{
-   return (((val - oldmin) * (newmax - newmin)) / (oldmax - oldmin)) + newmin;
-}
-
-static void zarch_zui_snow(zui_t *zui, gfx_coord_array_t *ca,
-      int width, int height)
-{
-   static struct zui_part particles[NPARTICLES];
-   static bool initialized = false;
-   static int timeout      = 0;
-   unsigned i, max_gen     = 2;
-
-   if (!initialized)
-   {
-      memset(particles, 0, sizeof(particles));
-      initialized = true;
-   }
-
-   for (i = 0; i < NPARTICLES; ++i)
-   {
-      struct zui_part *p = (struct zui_part*)&particles[i];
-
-      if (!p)
-         return;
-
-      if (p->alive)
-      {
-         int16_t mouse_x  = zarch_zui_input_state(zui, MENU_ZARCH_MOUSE_X);
-
-         p->y            += p->yspeed;
-         p->x            += zarch_zui_scalef(mouse_x, 0, width, -0.3, 0.3);
-         p->x            += p->xspeed;
-
-         p->alive         = p->y >= 0 && p->y < height 
-            && p->x >= 0 && p->x < width;
-      }
-      else if (max_gen > 0 && timeout <= 0)
-      {
-         p->xspeed = zarch_zui_randf(-0.2, 0.2);
-         p->yspeed = zarch_zui_randf(1, 2);
-         p->y      = 0;
-         p->x      = rand() % width;
-         p->alpha  = (float)rand() / (float)RAND_MAX;
-         p->alive  = true;
-
-         max_gen--;
-      }
-   }
-
-   if (max_gen == 0)
-      timeout = 3;
-   else
-      timeout--;
-
-   for (i = 0; i < NPARTICLES; ++i)
-   {
-      unsigned j;
-      float alpha;
-      float colors[16];
-      struct zui_part *p = &particles[i];
-
-      if (!p)
-         return;
-
-      if (!p->alive)
-         continue;
-
-      alpha = zarch_zui_randf(0, 100) > 90 ? p->alpha/2 : p->alpha;
-
-      for (j = 0; j < 16; j++)
-      {
-         colors[j] = 1;
-         if (j == 3 || j == 7 || j == 11 || j == 15)
-            colors[j] = alpha;
-      }
-
-      zarch_zui_push_quad(width, height,
-            colors, ca, p->x-2, p->y-2, p->x+2, p->y+2);
-
-      j++;
-   }
-}
-
 static bool zarch_zui_button_full(zui_t *zui,
       int x1, int y1, int x2, int y2, const char *label)
 {
@@ -457,7 +319,7 @@ static bool zarch_zui_button_full(zui_t *zui,
    if (zui->item.active == id || zui->item.hot == id)
       bg = zui_bg_hilite;
 
-   zarch_zui_push_quad(zui->width, zui->height,  bg, &zui->ca,  x1, y1, x2, y2);
+   menu_display_push_quad(zui->width, zui->height,  bg, x1, y1, x2, y2);
    zarch_zui_draw_text(zui, ZUI_FG_NORMAL, x1+12, y1 + 41, label);
 
    return active;
@@ -513,7 +375,7 @@ static bool zarch_zui_list_item(zui_t *zui, struct zui_tabbed *tab, int x1, int 
 
    menu_animation_ctl(MENU_ANIMATION_CTL_TICKER, &ticker);
 
-   zarch_zui_push_quad(zui->width, zui->height, bg, &zui->ca, x1, y1, x2, y2);
+   menu_display_push_quad(zui->width, zui->height, bg, x1, y1, x2, y2);
    zarch_zui_draw_text(zui, ZUI_FG_NORMAL, 12, y1 + 35, title_buf);
 
    if (entry)
@@ -572,7 +434,7 @@ static bool zarch_zui_tab(zui_t *zui, struct zui_tabbed *tab,
    else if (selected)
       bg             = zui_bg_pad_hilite;
 
-   zarch_zui_push_quad(zui->width, zui->height,  bg, &zui->ca, x1+0, y1+0, x2, y2);
+   menu_display_push_quad(zui->width, zui->height,  bg, x1+0, y1+0, x2, y2);
    zarch_zui_draw_text(zui, ZUI_FG_NORMAL, x1+12, y1 + 41, label);
 
    if (tab->vertical)
@@ -897,8 +759,8 @@ static int zarch_zui_render_lay_root(zui_t *zui)
    zarch_zui_draw_text(zui, ZUI_FG_NORMAL, 1600 +12, 300 + 111, item); 
 #endif
 
-   zarch_zui_push_quad(zui->width, zui->height,
-         zui_bg_hilite, &zui->ca, 0, 60, zui->width - 290 - 40, 60+4);
+   menu_display_push_quad(zui->width, zui->height,
+         zui_bg_hilite, 0, 60, zui->width - 290 - 40, 60+4);
 
    return 0;
 }
@@ -1005,8 +867,11 @@ static void zarch_frame(void *data)
    float coord_color2[16];
    menu_display_ctx_draw_t draw;
    menu_display_ctx_coord_draw_t coord_draw;
-   settings_t *settings = config_get_ptr();
-   zui_t *zui           = (zui_t*)data;
+   settings_t *settings    = config_get_ptr();
+   zui_t *zui              = (zui_t*)data;
+   gfx_coord_array_t *ca   = NULL;
+
+   menu_display_ctl(MENU_DISPLAY_CTL_COORDS_ARRAY_GET, &ca);
    
    if (!zui)
       return;
@@ -1036,15 +901,15 @@ static void zarch_frame(void *data)
    zui->mouse.wheel = menu_input_mouse_state(MENU_MOUSE_WHEEL_DOWN) - 
       menu_input_mouse_state(MENU_MOUSE_WHEEL_UP);
 
-   zui->ca.coords.vertices = 0;
+   menu_display_ctl(MENU_DISPLAY_CTL_COORDS_ARRAY_RESET, NULL);
 
    zui->tmp_block.carr.coords.vertices = 0;
 
    menu_display_ctl(MENU_DISPLAY_CTL_FONT_BIND_BLOCK, &zui->tmp_block);
 
-   zarch_zui_push_quad(zui->width, zui->height, zui_bg_screen,
-         &zui->ca, 0, 0, zui->width, zui->height);
-   zarch_zui_snow(zui, &zui->ca, zui->width, zui->height);
+   menu_display_push_quad(zui->width, zui->height, zui_bg_screen,
+         0, 0, zui->width, zui->height);
+   menu_display_snow(zui->width, zui->height);
 
    switch (zarch_layout)
    {
@@ -1082,9 +947,9 @@ static void zarch_frame(void *data)
    draw.y           = 0;
    draw.width       = zui->width;
    draw.height      = zui->height;
-   draw.coords      = (struct gfx_coords*)&zui->ca;
+   draw.coords      = (struct gfx_coords*)ca;
    draw.matrix_data = &zui->mvp;
-   draw.texture     = zui->textures.white;
+   draw.texture     = menu_display_white_texture;
    draw.prim_type   = MENU_DISPLAY_PRIM_TRIANGLES;
 
    menu_display_ctl(MENU_DISPLAY_CTL_DRAW, &draw);
@@ -1117,6 +982,8 @@ static void zarch_frame(void *data)
       draw.color             = &coord_color2[0];
 
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
+   draw.x              = 0;
+   draw.y              = 0;
    menu_display_ctl(MENU_DISPLAY_CTL_DRAW_BG, &draw);
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
 
@@ -1169,8 +1036,6 @@ static void *zarch_init(void **userdata)
             "cb_menu_wallpaper",
             menu_display_handle_wallpaper_upload, NULL);
 
-   zui->ca.allocated     =  0;
-
    matrix_4x4_ortho(&zui->mvp, 0, 1, 1, 0, 0, 1);
 
    zarch_zui_font();
@@ -1187,10 +1052,7 @@ static void zarch_free(void *data)
    zui_t        *zui                       = (zui_t*)data;
 
    if (zui)
-   {
-      gfx_coord_array_free(&zui->ca);
       gfx_coord_array_free(&zui->tmp_block.carr);
-   }
 
    font_driver_bind_block(NULL, NULL);
 }
@@ -1201,7 +1063,7 @@ static void zarch_context_bg_destroy(void *data)
    if (!zui)
       return;
    video_driver_texture_unload(&zui->textures.bg);
-   video_driver_texture_unload(&zui->textures.white);
+   video_driver_texture_unload(&menu_display_white_texture);
 }
 
 static void zarch_context_destroy(void *data)
@@ -1235,20 +1097,6 @@ static bool zarch_load_image(void *userdata,
    return true;
 }
 
-static void zarch_allocate_white_texture(zui_t *zui)
-{
-   struct texture_image ti;
-   static const uint32_t data = UINT32_MAX;
-
-   ti.width  = 1;
-   ti.height = 1;
-   ti.pixels = (uint32_t*)&data;
-
-   video_driver_texture_load(&ti,
-         TEXTURE_FILTER_NEAREST,
-         &zui->textures.white);
-}
-
 static void zarch_context_reset(void *data)
 {
    menu_display_ctx_font_t font_info;
@@ -1272,7 +1120,7 @@ static void zarch_context_reset(void *data)
    rarch_task_push_image_load(settings->menu.wallpaper,
          "cb_menu_wallpaper", menu_display_handle_wallpaper_upload, NULL);
 
-   zarch_allocate_white_texture(zui);
+   menu_display_allocate_white_texture();
 
    menu_display_ctl(MENU_DISPLAY_CTL_SET_FONT_SIZE, &zui->font_size);
    zarch_zui_font();

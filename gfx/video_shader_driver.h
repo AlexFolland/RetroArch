@@ -20,6 +20,8 @@
 
 #include <gfx/math/matrix_4x4.h>
 
+#include "video_coord_array.h"
+
 #ifdef HAVE_CONFIG_H
 #include "../config.h"
 #endif
@@ -31,19 +33,17 @@
 
 #include "video_shader_parse.h"
 
-#define GL_SHADER_STOCK_BLEND (GFX_MAX_SHADERS - 1)
-#define GL_SHADER_STOCK_XMB (GFX_MAX_SHADERS - 2)
+#define VIDEO_SHADER_STOCK_BLEND (GFX_MAX_SHADERS - 1)
+#define VIDEO_SHADER_MENU        (GFX_MAX_SHADERS - 2)
 
 #endif
 
 #if defined(_XBOX360)
 #define DEFAULT_SHADER_TYPE RARCH_SHADER_HLSL
-#elif defined(__PSL1GHT__)
+#elif defined(__PSL1GHT__) || defined(HAVE_OPENGLES2) || defined(HAVE_GLSL)
 #define DEFAULT_SHADER_TYPE RARCH_SHADER_GLSL
-#elif defined(__CELLOS_LV2__)
+#elif defined(__CELLOS_LV2__) || defined(HAVE_CG)
 #define DEFAULT_SHADER_TYPE RARCH_SHADER_CG
-#elif defined(HAVE_OPENGLES2)
-#define DEFAULT_SHADER_TYPE RARCH_SHADER_GLSL
 #else
 #define DEFAULT_SHADER_TYPE RARCH_SHADER_NONE
 #endif
@@ -61,10 +61,12 @@ enum video_shader_driver_ctl_state
    SHADER_CTL_INIT,
    /* Finds first suitable shader context driver. */
    SHADER_CTL_INIT_FIRST,
+   SHADER_CTL_SET_PARAMETER,
    SHADER_CTL_SET_PARAMS,
    SHADER_CTL_GET_FEEDBACK_PASS,
    SHADER_CTL_MIPMAP_INPUT,
    SHADER_CTL_SET_COORDS,
+   SHADER_CTL_COMPILE_PROGRAM,
    SHADER_CTL_SCALE,
    SHADER_CTL_INFO,
    SHADER_CTL_SET_MVP,
@@ -90,23 +92,39 @@ enum shader_uniform_type
    UNIFORM_1I
 };
 
+enum shader_program_type
+{
+   SHADER_PROGRAM_VERTEX = 0,
+   SHADER_PROGRAM_FRAGMENT,
+   SHADER_PROGRAM_COMBINED
+};
+
 struct shader_program_info
 {
+   void *data;
    const char *vertex;
    const char *fragment;
    const char *combined;
+   unsigned idx;
    bool is_file;
 };
 
-typedef struct shader_program_data shader_program_data_t;
-
 struct uniform_info
 {
-   enum shader_uniform_type type;
+   unsigned type; /* shader uniform type */
    bool enabled;
 
    int32_t location;
    int32_t count;
+
+   struct
+   {
+      enum shader_program_type type;
+      const char *ident;
+      uint32_t idx;
+      bool add_prefix;
+      bool enable;
+   } lookup;
 
    struct
    {
@@ -155,15 +173,19 @@ typedef struct shader_backend
          const void *prev_info,
          const void *feedback_info,
          const void *fbo_info, unsigned fbo_info_cnt);
+   void (*set_uniform_parameter)(void *data, struct uniform_info *param,
+         void *uniform_data);
+   bool (*compile_program)(void *data, unsigned idx,
+         void *program_data, struct shader_program_info *program_info);
 
-   void (*use)(void *data, void *shader_data, unsigned index);
+   void (*use)(void *data, void *shader_data, unsigned index, bool set_active);
    unsigned (*num_shaders)(void *data);
    bool (*filter_type)(void *data, unsigned index, bool *smooth);
    enum gfx_wrap_type (*wrap_type)(void *data, unsigned index);
    void (*shader_scale)(void *data,
          unsigned index, struct gfx_fbo_scale *scale);
    bool (*set_coords)(void *handle_data,
-         void *shader_data, const void *data);
+         void *shader_data, const struct gfx_coords *coords);
    bool (*set_mvp)(void *data, void *shader_data,
          const math_matrix_4x4 *mat);
    unsigned (*get_prev_textures)(void *data);
@@ -180,7 +202,12 @@ typedef struct shader_backend
 
 typedef struct video_shader_ctx_init
 {
+   enum rarch_shader_type shader_type;
    const shader_backend_t *shader;
+   struct
+   {
+      bool core_context_enabled;
+   } gl;
    void *data;
    const char *path;
 } video_shader_ctx_init_t;
@@ -216,6 +243,7 @@ typedef struct video_shader_ctx_scale
 
 typedef struct video_shader_ctx_info
 {
+   bool set_active;
    unsigned num;
    unsigned idx;
    void *data;

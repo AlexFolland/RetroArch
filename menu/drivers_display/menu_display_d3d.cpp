@@ -42,13 +42,14 @@ static const float d3d_tex_coords[] = {
    1, 0
 };
 
-static d3d_video_t *d3d_get_ptr(void)
+static const float *menu_display_d3d_get_default_vertices(void)
 {
-   d3d_video_t *d3d = (d3d_video_t*)video_driver_get_ptr(false);
+   return &d3d_vertexes[0];
+}
 
-   if (!d3d)
-      return NULL;
-   return d3d;
+static const float *menu_display_d3d_get_default_tex_coords(void)
+{
+   return &d3d_tex_coords[0];
 }
 
 static void *menu_display_d3d_get_default_mvp(void)
@@ -57,7 +58,7 @@ static void *menu_display_d3d_get_default_mvp(void)
    static math_matrix_4x4 default_mvp;
    D3DXMATRIX ortho, mvp;
 #endif
-   d3d_video_t *d3d = d3d_get_ptr();
+   d3d_video_t *d3d = (d3d_video_t*)video_driver_get_ptr(false);
 
    if (!d3d)
       return NULL;
@@ -91,7 +92,7 @@ static unsigned menu_display_prim_to_d3d_enum(
 
 static void menu_display_d3d_blend_begin(void)
 {
-   d3d_video_t *d3d = d3d_get_ptr();
+   d3d_video_t *d3d = (d3d_video_t*)video_driver_get_ptr(false);
 
    if (!d3d)
       return;
@@ -101,7 +102,7 @@ static void menu_display_d3d_blend_begin(void)
 
 static void menu_display_d3d_blend_end(void)
 {
-   d3d_video_t *d3d = d3d_get_ptr();
+   d3d_video_t *d3d = (d3d_video_t*)video_driver_get_ptr(false);
 
    if (!d3d)
       return;
@@ -109,31 +110,14 @@ static void menu_display_d3d_blend_end(void)
    d3d_disable_blend_func(d3d->dev);
 }
 
-static void menu_display_d3d_draw(void *data)
+static void menu_display_d3d_viewport(void *data)
 {
    D3DVIEWPORT                vp = {0};
-   math_matrix_4x4          *mat = NULL;
-   d3d_video_t              *d3d = d3d_get_ptr();
+   d3d_video_t              *d3d = (d3d_video_t*)video_driver_get_ptr(false);
    menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
 
    if (!d3d || !draw)
       return;
-   
-   mat = (math_matrix_4x4*)draw->matrix_data;
-
-   /* TODO - edge case */
-   if (draw->height <= 0)
-      draw->height = 1;
-
-   if (!mat)
-      mat                         = (math_matrix_4x4*)
-         menu_display_d3d_get_default_mvp();
-   if (!draw->coords->vertex)
-      draw->coords->vertex        = &d3d_vertexes[0];
-   if (!draw->coords->tex_coord)
-      draw->coords->tex_coord     = &d3d_tex_coords[0];
-   if (!draw->coords->lut_tex_coord)
-      draw->coords->lut_tex_coord = &d3d_tex_coords[0];
 
    vp.X      = draw->x;
    vp.Y      = draw->y;
@@ -143,9 +127,45 @@ static void menu_display_d3d_draw(void *data)
    vp.MaxZ   = 1.0f;
 
    d3d_set_viewports(d3d->dev, &vp);
+}
+
+static void menu_display_d3d_bind_texture(void *data)
+{
+   d3d_video_t              *d3d = (d3d_video_t*)video_driver_get_ptr(false);
+   menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
+   
+   if (!d3d || !draw)
+      return;
+
    d3d_set_texture(d3d->dev, 0, (LPDIRECT3DTEXTURE)draw->texture);
+}
+
+static void menu_display_d3d_draw(void *data)
+{
+#if 0
+   math_matrix_4x4          *mat = NULL;
+#endif
+   d3d_video_t              *d3d = (d3d_video_t*)video_driver_get_ptr(false);
+   menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
+
+   if (!d3d || !draw)
+      return;
+   
+   if (!draw->coords->vertex)
+      draw->coords->vertex        = menu_display_d3d_get_default_vertices();
+   if (!draw->coords->tex_coord)
+      draw->coords->tex_coord     = menu_display_d3d_get_default_tex_coords();
+   if (!draw->coords->lut_tex_coord)
+      draw->coords->lut_tex_coord = menu_display_d3d_get_default_tex_coords();
+
+   menu_display_d3d_viewport(draw);
+   menu_display_d3d_bind_texture(draw);
 
 #if 0
+   mat = (math_matrix_4x4*)draw->matrix_data;
+   if (!mat)
+      mat                         = (math_matrix_4x4*)
+         menu_display_d3d_get_default_mvp();
    video_shader_driver_set_coords(d3d, draw->coords);
    video_shader_driver_set_mvp(d3d, mat);
 #endif
@@ -153,69 +173,20 @@ static void menu_display_d3d_draw(void *data)
    d3d_draw_primitive(d3d->dev, (D3DPRIMITIVETYPE)
          menu_display_prim_to_d3d_enum(draw->prim_type),
          0, draw->coords->vertices);
-
-#if 0
-   gl->coords.color     = gl->white_color_ptr;
-#endif
-}
-
-static void menu_display_d3d_draw_bg(void *data)
-{
-   struct gfx_coords coords;
-   const float    *new_vertex    = NULL;
-   const float    *new_tex_coord = NULL;
-   global_t              *global = global_get_ptr();
-   settings_t          *settings = config_get_ptr();
-   d3d_video_t              *d3d = d3d_get_ptr();
-   menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
-
-   if (!d3d || !draw)
-      return;
-
-   (void)coords;
-
-   new_vertex    = draw->vertex;
-   new_tex_coord = draw->tex_coord;
-
-   if (!new_vertex)
-      new_vertex = &d3d_vertexes[0];
-   if (!new_tex_coord)
-      new_tex_coord = &d3d_tex_coords[0];
-
-   coords.vertices      = draw->vertex_count;
-   coords.vertex        = new_vertex;
-   coords.tex_coord     = new_tex_coord;
-   coords.lut_tex_coord = new_tex_coord;
-   coords.color         = (const float*)draw->color;
-
-   menu_display_ctl(MENU_DISPLAY_CTL_SET_VIEWPORT, NULL);
-
-   draw->x           = 0;
-   draw->y           = 0;
-   draw->matrix_data = (math_matrix_4x4*)
-      menu_display_d3d_get_default_mvp();
-
-   menu_display_d3d_draw(draw);
-
-#if 0
-   gl->coords.color = gl->white_color_ptr;
-#endif
 }
 
 static void menu_display_d3d_restore_clear_color(void)
 {
-   d3d_video_t     *d3d = d3d_get_ptr();
+   d3d_video_t *d3d = (d3d_video_t*)video_driver_get_ptr(false);
    DWORD    clear_color = 0x00000000;
 
    d3d_clear(d3d->dev, 0, NULL, D3DCLEAR_TARGET, clear_color, 0, 0);
 }
 
-static void menu_display_d3d_clear_color(void *data)
+static void menu_display_d3d_clear_color(menu_display_ctx_clearcolor_t *clearcolor)
 {
    DWORD    clear_color                      = 0;
-   d3d_video_t     *d3d                      = d3d_get_ptr();
-   menu_display_ctx_clearcolor_t *clearcolor = 
-      (menu_display_ctx_clearcolor_t*)data;
+   d3d_video_t *d3d = (d3d_video_t*)video_driver_get_ptr(false);
 
    if (!d3d || !clearcolor)
       return;
@@ -230,11 +201,6 @@ static void menu_display_d3d_clear_color(void *data)
    d3d_clear(d3d->dev, 0, NULL, D3DCLEAR_TARGET, clear_color, 0, 0);
 }
 
-static const float *menu_display_d3d_get_tex_coords(void)
-{
-   return &d3d_tex_coords[0];
-}
-
 static bool menu_display_d3d_font_init_first(
       void **font_handle, void *video_data,
       const char *font_path, float font_size)
@@ -245,13 +211,14 @@ static bool menu_display_d3d_font_init_first(
 
 menu_display_ctx_driver_t menu_display_ctx_d3d = {
    menu_display_d3d_draw,
-   menu_display_d3d_draw_bg,
+   menu_display_d3d_viewport,
    menu_display_d3d_blend_begin,
    menu_display_d3d_blend_end,
    menu_display_d3d_restore_clear_color,
    menu_display_d3d_clear_color,
    menu_display_d3d_get_default_mvp,
-   menu_display_d3d_get_tex_coords,
+   menu_display_d3d_get_default_vertices,
+   menu_display_d3d_get_default_tex_coords,
    menu_display_d3d_font_init_first,
    MENU_VIDEO_DRIVER_DIRECT3D,
    "menu_display_d3d",

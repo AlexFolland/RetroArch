@@ -48,6 +48,13 @@
 
 #include "../../tasks/tasks_internal.h"
 
+#if 0
+#define XMB_RIBBON_ENABLE
+#define XMB_RIBBON_ROWS 16
+#define XMB_RIBBON_COLS 32
+#define XMB_RIBBON_VERTICES 2*XMB_RIBBON_COLS*XMB_RIBBON_ROWS-2*XMB_RIBBON_COLS
+#endif
+
 #ifndef XMB_DELAY
 #define XMB_DELAY 10
 #endif
@@ -227,22 +234,18 @@ typedef struct xmb_handle
    gfx_font_raster_block_t raster_block;
 } xmb_handle_t;
 
-static float ribbon_verts[1536];
-static int ribbon_idx[1024];
-
 static const char *xmb_theme_ident(void)
 {
    settings_t *settings = config_get_ptr();
    switch (settings->menu.xmb_theme)
    {
-      case 0:
-         return "monochrome";
       case 1:
          return "flatui";
       case 2:
          return "retroactive";
       case 3:
          return "custom";
+      case 0:
       default:
          break;
    }
@@ -253,16 +256,16 @@ static const char *xmb_theme_ident(void)
 static const char *xmb_thumbnails_ident(void)
 {
    settings_t *settings = config_get_ptr();
+
    switch (settings->menu.thumbnails)
    {
-      case 0:
-         return "OFF";
       case 1:
          return "Named_Snaps";
       case 2:
          return "Named_Titles";
       case 3:
          return "Named_Boxarts";
+      case 0:
       default:
          break;
    }
@@ -591,6 +594,7 @@ static void xmb_update_thumbnail_path(xmb_handle_t *xmb, unsigned i)
 {
    menu_entry_t entry;
    settings_t *settings       = config_get_ptr();
+   char *tmp = NULL;
 
    menu_entry_get(&entry, 0, i, NULL, true);
 
@@ -598,8 +602,15 @@ static void xmb_update_thumbnail_path(xmb_handle_t *xmb, unsigned i)
          xmb->title_name, sizeof(xmb->thumbnail_file_path));
    fill_pathname_join(xmb->thumbnail_file_path, xmb->thumbnail_file_path,
          xmb_thumbnails_ident(), sizeof(xmb->thumbnail_file_path));
-   fill_pathname_join(xmb->thumbnail_file_path, xmb->thumbnail_file_path,
-         entry.path, sizeof(xmb->thumbnail_file_path));
+
+   tmp = string_replace_substring(entry.path, "/", "-");
+
+   if (tmp)
+   {
+      fill_pathname_join(xmb->thumbnail_file_path, xmb->thumbnail_file_path,
+            tmp, sizeof(xmb->thumbnail_file_path));
+      free(tmp);
+   }
 
    strlcat(xmb->thumbnail_file_path, ".png", sizeof(xmb->thumbnail_file_path));
 }
@@ -1493,47 +1504,6 @@ static uintptr_t xmb_icon_get_id(xmb_handle_t *xmb,
    return xmb->textures.list[XMB_TEXTURE_SUBSETTING];
 }
 
-static void xmb_blend_begin(void)
-{
-   unsigned r, c;
-   unsigned i = 0;
-   const unsigned ribbon_rows    = 16;
-   const unsigned ribbon_columns = 32;
-
-   menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
-
-#if 0
-   /* Set up vertices */
-   for (r = 0; r < ribbon_rows; ++r)
-   {
-      for (c = 0; c < ribbon_columns; ++c)
-      {
-         int index = r * ribbon_columns + c;
-         ribbon_verts[3*index + 0] = ((float) c)/15.0f - 1.0;
-         ribbon_verts[3*index + 1] = 0.0f;
-         ribbon_verts[3*index + 2] = ((float) r)/8.0f - 1.0;
-      }
-   }
-
-   for (r = 0; r < ribbon_rows - 1; ++r)
-   {
-      ribbon_idx[i++] = r * ribbon_columns;
-
-      for (c = 0; c < ribbon_columns; ++c)
-      {
-         ribbon_idx[i++] = r * ribbon_columns + c;
-         ribbon_idx[i++] = (r + 1) * ribbon_columns + c;
-      }
-      ribbon_idx[i++] = (r + 1) * ribbon_columns + (ribbon_columns - 1);
-   }
-#endif
-}
-
-static void xmb_blend_end(void)
-{
-   menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
-}
-
 static void xmb_draw_items(xmb_handle_t *xmb,
       file_list_t *list, file_list_t *stack,
       size_t current, size_t cat_selection_ptr, float *color,
@@ -1757,7 +1727,7 @@ static void xmb_draw_items(xmb_handle_t *xmb,
                TEXT_ALIGN_LEFT,
                width, height);
 
-      xmb_blend_begin();
+      menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
 
       /* set alpha components of color */
       color[3] = color[7] = color[11] = color[15] =
@@ -1785,37 +1755,8 @@ static void xmb_draw_items(xmb_handle_t *xmb,
                0,
                1, &color[0]);
 
-      xmb_blend_end();
+      menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
    }
-}
-
-static void xmb_draw_cursor(xmb_handle_t *xmb,
-      float *color,
-      float x, float y, unsigned width, unsigned height)
-{
-   menu_display_ctx_draw_t draw;
-   struct gfx_coords coords;
-
-   coords.vertices      = 4;
-   coords.vertex        = NULL;
-   coords.tex_coord     = NULL;
-   coords.lut_tex_coord = NULL;
-   coords.color         = (const float*)color;
-
-   xmb_blend_begin();
-
-   draw.x           = x - (xmb->cursor.size / 2);
-   draw.y           = height - y - (xmb->cursor.size / 2);
-   draw.width       = xmb->cursor.size;
-   draw.height      = xmb->cursor.size;
-   draw.coords      = &coords;
-   draw.matrix_data = NULL;
-   draw.texture     = xmb->textures.list[XMB_TEXTURE_POINTER];
-   draw.prim_type   = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
-
-   menu_display_ctl(MENU_DISPLAY_CTL_DRAW, &draw);
-
-   xmb_blend_end();
 }
 
 static void xmb_render(void *data)
@@ -1895,7 +1836,7 @@ static void xmb_frame_horizontal_list(xmb_handle_t *xmb,
       if (!node)
          continue;
 
-      xmb_blend_begin();
+      menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
 
       /* set alpha components of color */
       color[3] = color[7] = color[11] = color[15] = (node->alpha > xmb->alpha)
@@ -1912,15 +1853,67 @@ static void xmb_frame_horizontal_list(xmb_handle_t *xmb,
                node->zoom,
                &color[0]);
 
-      xmb_blend_end();
+      menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
    }
 }
 
-static void xmb_draw_bg(menu_display_ctx_draw_t *draw)
+#ifdef XMB_RIBBON_ENABLE
+static void xmb_draw_ribbon(xmb_handle_t *xmb, menu_display_ctx_draw_t *draw)
+{
+   struct uniform_info uniform_param = {0};
+   static float t = 0;
+   video_shader_ctx_info_t shader_info;
+   gfx_coord_array_t *ca   = NULL;
+
+   menu_display_ctl(MENU_DISPLAY_CTL_COORDS_ARRAY_GET, &ca);
+
+   if (menu_display_ctl(MENU_DISPLAY_CTL_LIBRETRO_RUNNING, NULL))
+      draw->handle_alpha = 0.75;
+   else
+      draw->handle_alpha = 0.90;
+
+   menu_display_ctl(MENU_DISPLAY_CTL_DRAW_GRADIENT, draw);
+
+   draw->x           = 0;
+   draw->y           = 0;
+   draw->coords      = (struct gfx_coords*)(&ca->coords);
+   draw->matrix_data = NULL;
+
+   shader_info.data = NULL;
+   shader_info.idx  = VIDEO_SHADER_MENU;
+
+   video_shader_driver_ctl(SHADER_CTL_USE, &shader_info);
+
+   t += 0.01;
+
+   uniform_param.enabled           = true;
+   uniform_param.lookup.enable     = true;
+   uniform_param.lookup.add_prefix = true;
+   uniform_param.lookup.idx        = VIDEO_SHADER_MENU;
+   uniform_param.lookup.type       = SHADER_PROGRAM_VERTEX;
+   uniform_param.type              = UNIFORM_1F;
+   uniform_param.lookup.ident      = "time";
+   uniform_param.result.f.v0       = t;
+
+   video_shader_driver_ctl(SHADER_CTL_SET_PARAMETER, &uniform_param);
+
+   menu_display_ctl(MENU_DISPLAY_CTL_DRAW, draw);
+}
+#endif
+
+static void xmb_draw_bg(xmb_handle_t *xmb, menu_display_ctx_draw_t *draw)
 {
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
    menu_display_ctl(MENU_DISPLAY_CTL_SET_VIEWPORT, NULL);
+
+#ifdef XMB_RIBBON_ENABLE
+   xmb_draw_ribbon(xmb, draw);
+#else
+   draw->x              = 0;
+   draw->y              = 0;
    menu_display_ctl(MENU_DISPLAY_CTL_DRAW_BG, draw);
+#endif
+
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
 }
 
@@ -1994,7 +1987,7 @@ static void xmb_frame(void *data)
       && !draw.force_transparency && draw.texture)
       draw.color             = &coord_color2[0];
 
-   xmb_draw_bg(&draw);
+   xmb_draw_bg(xmb, &draw);
 
    xmb_draw_text(xmb,
          xmb->title_name, xmb->margins.title.left,
@@ -2048,8 +2041,7 @@ static void xmb_frame(void *data)
    rotate_draw.scale_enable = true;
 
    menu_display_ctl(MENU_DISPLAY_CTL_ROTATE_Z, &rotate_draw);
-
-   xmb_blend_begin();
+   menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
 
    if (strcmp(xmb_thumbnails_ident(), "OFF") && xmb->thumbnail)
       xmb_draw_thumbnail(xmb, &coord_color2[0], width, height);
@@ -2133,7 +2125,7 @@ static void xmb_frame(void *data)
             && !draw.force_transparency && draw.texture)
          draw.color             = &coord_color2[0];
 
-      xmb_draw_bg(&draw);
+      xmb_draw_bg(xmb, &draw);
 
       xmb_render_messagebox_internal(xmb, msg);
    }
@@ -2148,7 +2140,14 @@ static void xmb_frame(void *data)
       int16_t mouse_x = menu_input_mouse_state(MENU_MOUSE_X_AXIS);
       int16_t mouse_y = menu_input_mouse_state(MENU_MOUSE_Y_AXIS);
 
-      xmb_draw_cursor(xmb, &coord_color2[0], mouse_x, mouse_y, width, height);
+      menu_display_draw_cursor(
+            &coord_color2[0],
+            xmb->cursor.size,
+            xmb->textures.list[XMB_TEXTURE_POINTER],
+            mouse_x,
+            mouse_y,
+            width,
+            height);
    }
 
    menu_display_ctl(MENU_DISPLAY_CTL_UNSET_VIEWPORT, NULL);
@@ -2210,7 +2209,7 @@ static void xmb_layout(xmb_handle_t *xmb)
    new_header_height            = 128.0 * scale_factor;
    xmb->margins.screen.top      = (256+32) * scale_factor;
 
-   xmb->thumbnail_width            = 460.0 * scale_factor;
+   xmb->thumbnail_width         = 460.0 * scale_factor;
    xmb->cursor.size             = 64.0;
 
    xmb->icon.spacing.horizontal = 200.0 * scale_factor;
@@ -2282,6 +2281,46 @@ static void xmb_layout(xmb_handle_t *xmb)
    }
 }
 
+#ifdef XMB_RIBBON_ENABLE
+static void xmb_ribbon_set_vertex(float *ribbon_verts, unsigned idx, unsigned row, unsigned col)
+{
+   ribbon_verts[idx++] = ((float)col) / 15.5f - 1.0f;
+   ribbon_verts[idx++] = ((float)row) / 7.5f  - 1.0f;
+}
+
+static void xmb_init_ribbon(xmb_handle_t * xmb)
+{
+   gfx_coords_t coords;
+   float ribbon_verts[2 * XMB_RIBBON_VERTICES];
+   unsigned i, r, c, col;
+   gfx_coord_array_t *ca   = NULL;
+   float dummy[4 * XMB_RIBBON_VERTICES] = { };
+
+   menu_display_ctl(MENU_DISPLAY_CTL_COORDS_ARRAY_GET, &ca);
+
+   /* Set up vertices */
+   i = 0;
+   for (r = 0; r < XMB_RIBBON_ROWS - 1; r++)
+   {
+      for (c = 0; c < XMB_RIBBON_COLS; c++)
+      {
+         col = r % 2 ? XMB_RIBBON_COLS - c - 1 : c;
+         xmb_ribbon_set_vertex(ribbon_verts, i, r, col);
+         xmb_ribbon_set_vertex(ribbon_verts, i + 2, r + 1, col);
+         i += 4;
+      }
+   }
+
+   coords.color         = dummy;
+   coords.vertex        = dummy;
+   coords.tex_coord     = dummy;
+   coords.lut_tex_coord = ribbon_verts;
+   coords.vertices      = XMB_RIBBON_VERTICES;
+
+   gfx_coord_array_append(ca, &coords, XMB_RIBBON_VERTICES);
+}
+#endif
+
 static void *xmb_init(void **userdata)
 {
    unsigned width, height;
@@ -2334,6 +2373,9 @@ static void *xmb_init(void **userdata)
 
    xmb_init_horizontal_list(xmb);
    xmb_font(xmb);
+#ifdef XMB_RIBBON_ENABLE
+   xmb_init_ribbon(xmb);
+#endif
 
    return menu;
 
@@ -2377,6 +2419,7 @@ static void xmb_free(void *data)
    }
 
    font_driver_bind_block(NULL, NULL);
+
 }
 
 static void xmb_context_bg_destroy(xmb_handle_t *xmb)
@@ -2419,6 +2462,87 @@ static bool xmb_load_image(void *userdata, void *data, enum menu_image_type type
    return true;
 }
 
+static const char *xmb_texture_path(unsigned id)
+{
+   switch (id)
+   {
+      case XMB_TEXTURE_MAIN_MENU:
+#if defined(HAVE_LAKKA)
+         return "lakka.png";
+#else
+         return "retroarch.png";
+#endif
+      case XMB_TEXTURE_SETTINGS:
+         return "settings.png";
+      case XMB_TEXTURE_HISTORY:
+         return "history.png";
+      case XMB_TEXTURE_SETTING:
+         return "setting.png";
+      case XMB_TEXTURE_SUBSETTING:
+         return "subsetting.png";
+      case XMB_TEXTURE_ARROW:
+         return "arrow.png";
+      case XMB_TEXTURE_RUN:
+         return "run.png";
+      case XMB_TEXTURE_CLOSE:
+         return "close.png";
+      case XMB_TEXTURE_RESUME:
+         return "resume.png";
+      case XMB_TEXTURE_CLOCK:
+         return "clock.png";
+      case XMB_TEXTURE_POINTER:
+         return "pointer.png";
+      case XMB_TEXTURE_SAVESTATE:
+         return "savestate.png";
+      case XMB_TEXTURE_LOADSTATE:
+         return "loadstate.png";
+      case XMB_TEXTURE_CORE_INFO:
+         return "core-infos.png";
+      case XMB_TEXTURE_CORE_OPTIONS:
+         return "core-options.png";
+      case XMB_TEXTURE_INPUT_REMAPPING_OPTIONS:
+         return "core-input-remapping-options.png";
+      case XMB_TEXTURE_CHEAT_OPTIONS:
+         return "core-cheat-options.png";
+      case XMB_TEXTURE_DISK_OPTIONS:
+         return "core-disk-options.png";
+      case XMB_TEXTURE_SHADER_OPTIONS:
+         return "core-shader-options.png";
+      case XMB_TEXTURE_ACHIEVEMENT_LIST:
+         return "achievement-list.png";
+      case XMB_TEXTURE_SCREENSHOT:
+         return "screenshot.png";
+      case XMB_TEXTURE_RELOAD:
+         return "reload.png";
+      case XMB_TEXTURE_FILE:
+         return "file.png";
+      case XMB_TEXTURE_FOLDER:
+         return "folder.png";
+      case XMB_TEXTURE_ZIP:
+         return "zip.png";
+      case XMB_TEXTURE_MUSIC:
+         return "music.png";
+      case XMB_TEXTURE_IMAGE:
+         return "image.png";
+      case XMB_TEXTURE_MOVIE:
+         return "movie.png";
+      case XMB_TEXTURE_CORE:
+         return "core.png";
+      case XMB_TEXTURE_RDB:
+         return "database.png";
+      case XMB_TEXTURE_CURSOR:
+         return "cursor.png";
+      case XMB_TEXTURE_SWITCH_ON:
+         return "on.png";
+      case XMB_TEXTURE_SWITCH_OFF:
+         return "off.png";
+      case XMB_TEXTURE_ADD:
+         return "add.png";
+   }
+
+   return NULL;
+}
+
 static void xmb_context_reset_textures(
       xmb_handle_t *xmb, const char *iconpath)
 {
@@ -2428,121 +2552,10 @@ static void xmb_context_reset_textures(
    {
       struct texture_image ti     = {0};
       char path[PATH_MAX_LENGTH]  = {0};
+      const char *texture_path    = xmb_texture_path(i);
 
-      switch(i)
-      {
-         case XMB_TEXTURE_MAIN_MENU:
-#if defined(HAVE_LAKKA)
-            fill_pathname_join(path, iconpath, "lakka.png", sizeof(path));
-#else
-            fill_pathname_join(path, iconpath, "retroarch.png", sizeof(path));
-#endif
-            break;
-         case XMB_TEXTURE_SETTINGS:
-            fill_pathname_join(path, iconpath, "settings.png",   sizeof(path));
-            break;
-         case XMB_TEXTURE_HISTORY:
-            fill_pathname_join(path, iconpath, "history.png",   sizeof(path));
-            break;
-         case XMB_TEXTURE_SETTING:
-            fill_pathname_join(path, iconpath, "setting.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_SUBSETTING:
-            fill_pathname_join(path, iconpath, "subsetting.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_ARROW:
-            fill_pathname_join(path, iconpath, "arrow.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_RUN:
-            fill_pathname_join(path, iconpath, "run.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_CLOSE:
-            fill_pathname_join(path, iconpath, "close.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_RESUME:
-            fill_pathname_join(path, iconpath, "resume.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_CLOCK:
-            fill_pathname_join(path, iconpath, "clock.png",   sizeof(path));
-            break;
-         case XMB_TEXTURE_POINTER:
-            fill_pathname_join(path, iconpath, "pointer.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_SAVESTATE:
-            fill_pathname_join(path, iconpath, "savestate.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_LOADSTATE:
-            fill_pathname_join(path, iconpath, "loadstate.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_CORE_INFO:
-            fill_pathname_join(path, iconpath, "core-infos.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_CORE_OPTIONS:
-            fill_pathname_join(path, iconpath, "core-options.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_INPUT_REMAPPING_OPTIONS:
-            fill_pathname_join(path, iconpath,
-                  "core-input-remapping-options.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_CHEAT_OPTIONS:
-            fill_pathname_join(path, iconpath,
-                  "core-cheat-options.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_DISK_OPTIONS:
-            fill_pathname_join(path, iconpath,
-                  "core-disk-options.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_SHADER_OPTIONS:
-            fill_pathname_join(path, iconpath,
-                  "core-shader-options.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_ACHIEVEMENT_LIST:
-            fill_pathname_join(path, iconpath,
-                  "achievement-list.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_SCREENSHOT:
-            fill_pathname_join(path, iconpath, "screenshot.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_RELOAD:
-            fill_pathname_join(path, iconpath, "reload.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_FILE:
-            fill_pathname_join(path, iconpath, "file.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_FOLDER:
-            fill_pathname_join(path, iconpath, "folder.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_ZIP:
-            fill_pathname_join(path, iconpath, "zip.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_MUSIC:
-            fill_pathname_join(path, iconpath, "music.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_IMAGE:
-            fill_pathname_join(path, iconpath, "image.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_MOVIE:
-            fill_pathname_join(path, iconpath, "movie.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_CORE:
-            fill_pathname_join(path, iconpath, "core.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_RDB:
-            fill_pathname_join(path, iconpath, "database.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_CURSOR:
-            fill_pathname_join(path, iconpath, "cursor.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_SWITCH_ON:
-            fill_pathname_join(path, iconpath, "on.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_SWITCH_OFF:
-            fill_pathname_join(path, iconpath, "off.png", sizeof(path));
-            break;
-         case XMB_TEXTURE_ADD:
-            fill_pathname_join(path, iconpath, "add.png", sizeof(path));
-            break;
-      }
+      if (texture_path != NULL)
+         fill_pathname_join(path, iconpath, texture_path, sizeof(path));
 
       if (string_is_empty(path) || !path_file_exists(path))
          continue;
@@ -2558,21 +2571,21 @@ static void xmb_context_reset_textures(
 
    menu_display_allocate_white_texture();
 
-   xmb->main_menu_node.icon  = xmb->textures.list[XMB_TEXTURE_MAIN_MENU];
-   xmb->main_menu_node.alpha = XMB_CATEGORIES_ACTIVE_ALPHA;
-   xmb->main_menu_node.zoom  = XMB_CATEGORIES_ACTIVE_ZOOM;
+   xmb->main_menu_node.icon     = xmb->textures.list[XMB_TEXTURE_MAIN_MENU];
+   xmb->main_menu_node.alpha    = XMB_CATEGORIES_ACTIVE_ALPHA;
+   xmb->main_menu_node.zoom     = XMB_CATEGORIES_ACTIVE_ZOOM;
 
    xmb->settings_tab_node.icon  = xmb->textures.list[XMB_TEXTURE_SETTINGS];
    xmb->settings_tab_node.alpha = XMB_CATEGORIES_ACTIVE_ALPHA;
    xmb->settings_tab_node.zoom  = XMB_CATEGORIES_ACTIVE_ZOOM;
 
-   xmb->history_tab_node.icon  = xmb->textures.list[XMB_TEXTURE_HISTORY];
-   xmb->history_tab_node.alpha = XMB_CATEGORIES_ACTIVE_ALPHA;
-   xmb->history_tab_node.zoom  = XMB_CATEGORIES_ACTIVE_ZOOM;
+   xmb->history_tab_node.icon   = xmb->textures.list[XMB_TEXTURE_HISTORY];
+   xmb->history_tab_node.alpha  = XMB_CATEGORIES_ACTIVE_ALPHA;
+   xmb->history_tab_node.zoom   = XMB_CATEGORIES_ACTIVE_ZOOM;
 
-   xmb->add_tab_node.icon  = xmb->textures.list[XMB_TEXTURE_ADD];
-   xmb->add_tab_node.alpha = XMB_CATEGORIES_ACTIVE_ALPHA;
-   xmb->add_tab_node.zoom  = XMB_CATEGORIES_ACTIVE_ZOOM;
+   xmb->add_tab_node.icon       = xmb->textures.list[XMB_TEXTURE_ADD];
+   xmb->add_tab_node.alpha      = XMB_CATEGORIES_ACTIVE_ALPHA;
+   xmb->add_tab_node.zoom       = XMB_CATEGORIES_ACTIVE_ZOOM;
 }
 
 static void xmb_context_reset_background(const char *iconpath)

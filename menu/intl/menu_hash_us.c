@@ -1263,11 +1263,11 @@ const char *menu_hash_to_str_us(uint32_t hash)
       case MENU_LABEL_VALUE_RDB_ENTRY_START_CONTENT:
          return "Start Content";
       case MENU_LABEL_VALUE_DISK_OPTIONS:
-         return "Core Disk Options";
+         return "Disk Control";
       case MENU_LABEL_VALUE_CORE_OPTIONS:
-         return "Core Options";
+         return "Options";
       case MENU_LABEL_VALUE_CORE_CHEAT_OPTIONS:
-         return "Core Cheat Options";
+         return "Cheats";
       case MENU_LABEL_VALUE_CHEAT_FILE_LOAD:
          return "Cheat File Load";
       case MENU_LABEL_VALUE_CHEAT_FILE_SAVE_AS:
@@ -1315,7 +1315,7 @@ const char *menu_hash_to_str_us(uint32_t hash)
       case MENU_LABEL_VALUE_SAVE_NEW_CONFIG:
          return "Save New Config";
       case MENU_LABEL_VALUE_RESTART_CONTENT:
-         return "Restart Content";
+         return "Restart";
       case MENU_LABEL_VALUE_CORE_UPDATER_LIST:
          return "Core Updater";
       case MENU_LABEL_VALUE_CORE_UPDATER_BUILDBOT_URL:
@@ -1349,7 +1349,7 @@ const char *menu_hash_to_str_us(uint32_t hash)
       case MENU_LABEL_VALUE_LOAD_CONTENT:
          return "Select File";
       case MENU_LABEL_VALUE_CLOSE_CONTENT:
-         return "Close Content";
+         return "Close";
       case MENU_LABEL_VALUE_MANAGEMENT:
          return "Database Settings";
       case MENU_LABEL_VALUE_SAVE_STATE:
@@ -1357,7 +1357,7 @@ const char *menu_hash_to_str_us(uint32_t hash)
       case MENU_LABEL_VALUE_LOAD_STATE:
          return "Load State";
       case MENU_LABEL_VALUE_RESUME_CONTENT:
-         return "Resume Content";
+         return "Resume";
       case MENU_LABEL_VALUE_INPUT_DRIVER:
          return "Input Driver";
       case MENU_LABEL_VALUE_AUDIO_DRIVER:
@@ -1395,9 +1395,9 @@ const char *menu_hash_to_str_us(uint32_t hash)
       case MENU_LABEL_VALUE_THUMBNAILS:
          return "Thumbnails";
       case MENU_LABEL_VALUE_CORE_INPUT_REMAPPING_OPTIONS:
-         return "Core Input Options";
+         return "Controls";
       case MENU_LABEL_VALUE_SHADER_OPTIONS:
-         return "Shader Options";
+         return "Shaders";
       case MENU_LABEL_VALUE_VIDEO_SHADER_PARAMETERS:
          return "Preview Shader Parameters";
       case MENU_LABEL_VALUE_VIDEO_SHADER_PRESET_PARAMETERS:

@@ -20,6 +20,15 @@
 #include "zr_common.h"
 
 #include "../menu_display.h"
+#include "../../gfx/video_shader_driver.h"
+
+#include "../../gfx/drivers/gl_shaders/pipeline_zahnrad.glsl.vert.h"
+#include "../../gfx/drivers/gl_shaders/pipeline_zahnrad.glsl.frag.h"
+
+struct zr_font font;
+struct zr_user_font usrfnt;
+struct zr_allocator zr_alloc;
+struct zr_device device;
 
 struct zr_image zr_common_image_load(const char *filename)
 {
@@ -48,42 +57,19 @@ char* zr_common_file_load(const char* path, size_t* size)
    void *buf;
    ssize_t *length = (ssize_t*)size;
    filestream_read_file(path, &buf, length);
-   return buf;
+   return (char*)buf;
 }
 
 void zr_common_device_init(struct zr_device *dev)
 {
 #if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
    GLint status;
-   static const GLchar *vertex_shader =
-      "#version 300 es\n"
-      "uniform mat4 ProjMtx;\n"
-      "in vec2 Position;\n"
-      "in vec2 TexCoord;\n"
-      "in vec4 Color;\n"
-      "out vec2 Frag_UV;\n"
-      "out vec4 Frag_Color;\n"
-      "void main() {\n"
-      "   Frag_UV = TexCoord;\n"
-      "   Frag_Color = Color;\n"
-      "   gl_Position = ProjMtx * vec4(Position.xy, 0, 1);\n"
-      "}\n";
-   static const GLchar *fragment_shader =
-      "#version 300 es\n"
-      "precision mediump float;\n"
-      "uniform sampler2D Texture;\n"
-      "in vec2 Frag_UV;\n"
-      "in vec4 Frag_Color;\n"
-      "out vec4 Out_Color;\n"
-      "void main(){\n"
-      "   Out_Color = Frag_Color * texture(Texture, Frag_UV.st);\n"
-      "}\n";
 
-   dev->prog = glCreateProgram();
+   dev->prog      = glCreateProgram();
    dev->vert_shdr = glCreateShader(GL_VERTEX_SHADER);
    dev->frag_shdr = glCreateShader(GL_FRAGMENT_SHADER);
-   glShaderSource(dev->vert_shdr, 1, &vertex_shader, 0);
-   glShaderSource(dev->frag_shdr, 1, &fragment_shader, 0);
+   glShaderSource(dev->vert_shdr, 1, &zahnrad_vertex_shader, 0);
+   glShaderSource(dev->frag_shdr, 1, &zahnrad_fragment_shader, 0);
    glCompileShader(dev->vert_shdr);
    glCompileShader(dev->frag_shdr);
    glGetShaderiv(dev->vert_shdr, GL_COMPILE_STATUS, &status);
@@ -246,14 +232,16 @@ void zr_common_device_draw(struct zr_device *dev,
       struct zr_context *ctx, int width, int height,
       enum zr_anti_aliasing AA)
 {
+   video_shader_ctx_info_t shader_info;
    struct zr_buffer vbuf, ebuf;
    struct zr_convert_config config;
+   uintptr_t                 last_prog;
    const struct zr_draw_command *cmd = NULL;
    void                    *vertices = NULL;
    void                    *elements = NULL;
    const zr_draw_index       *offset = NULL;
 #if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
-   GLint last_prog, last_tex;
+   GLint last_tex;
    GLint last_ebo, last_vbo, last_vao;
    GLfloat ortho[4][4] = {
       {2.0f, 0.0f, 0.0f, 0.0f},
@@ -265,7 +253,7 @@ void zr_common_device_draw(struct zr_device *dev,
    ortho[1][1] /= (GLfloat)height;
 
    /* save previous opengl state */
-   glGetIntegerv(GL_CURRENT_PROGRAM, &last_prog);
+   glGetIntegerv(GL_CURRENT_PROGRAM, (GLint*)&last_prog);
    glGetIntegerv(GL_TEXTURE_BINDING_2D, &last_tex);
    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &last_vao);
    glGetIntegerv(GL_ELEMENT_ARRAY_BUFFER_BINDING, &last_ebo);
@@ -276,9 +264,15 @@ void zr_common_device_draw(struct zr_device *dev,
 
 #if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
    glActiveTexture(GL_TEXTURE0);
+#endif
 
    /* setup program */
-   glUseProgram(dev->prog);
+   shader_info.data       = NULL;
+   shader_info.idx        = dev->prog;
+   shader_info.set_active = false;
+   video_shader_driver_ctl(SHADER_CTL_USE, &shader_info);
+
+#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
    glUniformMatrix4fv(dev->uniform_proj, 1, GL_FALSE, &ortho[0][0]);
 
    /* convert from command queue into draw list and draw to screen */
@@ -335,9 +329,13 @@ void zr_common_device_draw(struct zr_device *dev,
    }
    zr_clear(ctx);
 
-#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
    /* restore old state */
-   glUseProgram((GLuint)last_prog);
+   shader_info.data       = NULL;
+   shader_info.idx        = (GLint)last_prog;
+   shader_info.set_active = false;
+   video_shader_driver_ctl(SHADER_CTL_USE, &shader_info);
+
+#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
    glBindTexture(GL_TEXTURE_2D, (GLuint)last_tex);
    glBindBuffer(GL_ARRAY_BUFFER, (GLuint)last_vbo);
    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, (GLuint)last_ebo);
