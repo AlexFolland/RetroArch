@@ -377,11 +377,11 @@ static void xmb_draw_icon_predone(xmb_handle_t *xmb,
       float alpha, float rotation, float scale_factor,
       float *color)
 {
-   settings_t *settings = config_get_ptr();
    menu_display_ctx_draw_t draw;
    struct gfx_coords coords;
    float shadow[16];
    unsigned i;
+   settings_t *settings = config_get_ptr();
 
    if (
          x < -xmb->icon.size/2 ||
@@ -499,7 +499,6 @@ static void xmb_draw_text(xmb_handle_t *xmb,
    settings_t *settings = config_get_ptr();
    struct font_params params;
    uint8_t a8                =   0;
-   void *disp_buf            = NULL;
 
    if (alpha > xmb->alpha)
       alpha = xmb->alpha;
@@ -513,8 +512,8 @@ static void xmb_draw_text(xmb_handle_t *xmb,
          || y < -xmb->icon.size || y > height + xmb->icon.size)
       return;
 
-   params.x           = x        / width;
-   params.y           = 1.0f - y / height;
+   params.x           = x;
+   params.y           = y;
    params.scale       = scale_factor;
    params.drop_mod    = 0.0f;
    params.drop_x      = 0.0f;
@@ -530,9 +529,7 @@ static void xmb_draw_text(xmb_handle_t *xmb,
       params.drop_alpha  = 0.25f;
    }
 
-   menu_display_ctl(MENU_DISPLAY_CTL_FONT_BUF, &disp_buf);
-
-   video_driver_set_osd_msg(str, &params, disp_buf);
+   menu_display_draw_text(str, width, height, &params);
 }
 
 static void xmb_messagebox(void *data, const char *message)
@@ -1028,28 +1025,21 @@ static void xmb_set_title(xmb_handle_t *xmb)
 
 static xmb_node_t* xmb_get_node(xmb_handle_t *xmb, unsigned i)
 {
-   xmb_node_t *node = NULL;
-
    switch (i)
    {
       case XMB_SYSTEM_TAB_SETTINGS:
-         node = &xmb->settings_tab_node;
-         break;
+         return &xmb->settings_tab_node;
       case XMB_SYSTEM_TAB_HISTORY:
-         node = &xmb->history_tab_node;
-         break;
+         return &xmb->history_tab_node;
       case XMB_SYSTEM_TAB_ADD:
-         node = &xmb->add_tab_node;
-         break;
+         return &xmb->add_tab_node;
       default:
-         node = &xmb->main_menu_node;
          if (i > XMB_SYSTEM_TAB_END)
-            node = xmb_get_userdata_from_horizontal_list(
+            return xmb_get_userdata_from_horizontal_list(
                   xmb, i - (XMB_SYSTEM_TAB_END + 1));
-         break;
    }
 
-   return node;
+   return &xmb->main_menu_node;
 }
 
 static void xmb_list_switch_horizontal_list(xmb_handle_t *xmb)
@@ -2136,19 +2126,14 @@ static void xmb_frame(void *data)
 
    if (        settings->menu.mouse.enable && (settings->video.fullscreen
             || !video_driver_ctl(RARCH_DISPLAY_CTL_HAS_WINDOWED, NULL)))
-   {
-      int16_t mouse_x = menu_input_mouse_state(MENU_MOUSE_X_AXIS);
-      int16_t mouse_y = menu_input_mouse_state(MENU_MOUSE_Y_AXIS);
-
       menu_display_draw_cursor(
             &coord_color2[0],
             xmb->cursor.size,
             xmb->textures.list[XMB_TEXTURE_POINTER],
-            mouse_x,
-            mouse_y,
+            menu_input_mouse_state(MENU_MOUSE_X_AXIS),
+            menu_input_mouse_state(MENU_MOUSE_Y_AXIS),
             width,
             height);
-   }
 
    menu_display_ctl(MENU_DISPLAY_CTL_UNSET_VIEWPORT, NULL);
 }
