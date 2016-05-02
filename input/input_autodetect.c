@@ -36,10 +36,10 @@ static void input_reindex_devices(void)
    unsigned i;
    settings_t      *settings = config_get_ptr();
 
-   for(i=0; i < settings->input.max_users; i++)
+   for(i = 0; i < settings->input.max_users; i++)
       settings->input.device_name_index[i]=0;
 
-   for(i=0; i < settings->input.max_users; i++)
+   for(i = 0; i < settings->input.max_users; i++)
    {
       unsigned j;
       const char *tmp = settings->input.device_names[i];
@@ -213,13 +213,13 @@ static bool input_autoconfigure_joypad_from_conf_dir(
       return false;
 
    fill_pathname_join(path,
-         settings->input.autoconfig_dir,
+         settings->directory.autoconfig,
          settings->input.joypad_driver,
          sizeof(path));
    list = dir_list_new(path, "cfg", false, false);
 
    if (!list || !list->size)
-      list = dir_list_new(settings->input.autoconfig_dir,
+      list = dir_list_new(settings->directory.autoconfig,
             "cfg", false, false);
 
    if(!list)
@@ -283,7 +283,7 @@ static bool input_autoconfigure_joypad_from_conf_internal(
          break;
    }
 
-   if (ret || !*settings->input.autoconfig_dir)
+   if (ret || !*settings->directory.autoconfig)
       return true;
    return false;
 }

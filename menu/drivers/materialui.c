@@ -167,7 +167,8 @@ static void mui_context_reset_textures(mui_handle_t *mui,
    }
 }
 
-static void mui_draw_icon(mui_handle_t *mui,
+static void mui_draw_icon(
+      unsigned icon_size,
       uintptr_t texture,
       float x, float y,
       unsigned width, unsigned height,
@@ -196,14 +197,14 @@ static void mui_draw_icon(mui_handle_t *mui,
    coords.lut_tex_coord = NULL;
    coords.color         = (const float*)color;
 
-   draw.x           = x;
-   draw.y           = height - y - mui->icon_size;
-   draw.width       = mui->icon_size;
-   draw.height      = mui->icon_size;
-   draw.coords      = &coords;
-   draw.matrix_data = &mymat;
-   draw.texture     = texture;
-   draw.prim_type   = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
+   draw.x               = x;
+   draw.y               = height - y - icon_size;
+   draw.width           = icon_size;
+   draw.height          = icon_size;
+   draw.coords          = &coords;
+   draw.matrix_data     = &mymat;
+   draw.texture         = texture;
+   draw.prim_type       = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
 
    menu_display_ctl(MENU_DISPLAY_CTL_DRAW, &draw);
 
@@ -220,35 +221,44 @@ static void mui_draw_tab(mui_handle_t *mui,
    switch (i)
    {
       case MUI_SYSTEM_TAB_MAIN:
-         tab_icon = (i == mui->categories.selection_ptr)
-            ? MUI_TEXTURE_TAB_MAIN_ACTIVE
-            : MUI_TEXTURE_TAB_MAIN_PASSIVE;
+         tab_icon = MUI_TEXTURE_TAB_MAIN_PASSIVE;
+         if (i == mui->categories.selection_ptr)
+            tab_icon = MUI_TEXTURE_TAB_MAIN_ACTIVE;
          break;
       case MUI_SYSTEM_TAB_PLAYLISTS:
-         tab_icon = (i == mui->categories.selection_ptr)
-            ? MUI_TEXTURE_TAB_PLAYLISTS_ACTIVE
-            : MUI_TEXTURE_TAB_PLAYLISTS_PASSIVE;
+         tab_icon = MUI_TEXTURE_TAB_PLAYLISTS_PASSIVE;
+         if (i == mui->categories.selection_ptr)
+            tab_icon = MUI_TEXTURE_TAB_PLAYLISTS_ACTIVE;
          break;
       case MUI_SYSTEM_TAB_SETTINGS:
-         tab_icon = (i == mui->categories.selection_ptr)
-            ? MUI_TEXTURE_TAB_SETTINGS_ACTIVE
-            : MUI_TEXTURE_TAB_SETTINGS_PASSIVE;
+         tab_icon = MUI_TEXTURE_TAB_SETTINGS_PASSIVE;
+         if (i == mui->categories.selection_ptr)
+            tab_icon = MUI_TEXTURE_TAB_SETTINGS_ACTIVE;
          break;
    }
 
-   mui_draw_icon(mui, mui->textures.list[tab_icon],
+   mui_draw_icon(
+         mui->icon_size,
+         mui->textures.list[tab_icon],
          width / (MUI_SYSTEM_TAB_END+1) * (i+0.5) - mui->icon_size/2,
          height - mui->tabs_height,
-         width, height, 0, 1, &pure_white[0]);
+         width,
+         height,
+         0,
+         1,
+         &pure_white[0]);
 }
 
 static void mui_draw_text(float x, float y, unsigned width, unsigned height,
       const char *msg, uint32_t color, enum text_alignment text_align)
 {
+   int font_size;
    struct font_params params;
 
-   params.x           = x;
-   params.y           = y;
+   menu_display_ctl(MENU_DISPLAY_CTL_FONT_SIZE, &font_size);
+
+   params.x           = x / width;
+   params.y           = 1.0f - (y + font_size / 3) / height;
    params.scale       = 1.0f;
    params.drop_mod    = 0.0f;
    params.drop_x      = 0.0f;
@@ -588,9 +598,16 @@ static void mui_render_label_value(mui_handle_t *mui,
             width, height, value_str, color, TEXT_ALIGN_RIGHT);
 
    if (texture_switch)
-      mui_draw_icon(mui, texture_switch,
-            width - mui->margin - mui->icon_size, y,
-            width, height, 0, 1, &pure_white[0]);
+      mui_draw_icon(
+            mui->icon_size,
+            texture_switch,
+            width - mui->margin - mui->icon_size,
+            y,
+            width,
+            height,
+            0,
+            1,
+            &pure_white[0]);
 }
 
 static void mui_render_menu_list(mui_handle_t *mui,
@@ -656,14 +673,6 @@ static size_t mui_list_get_size(void *data, enum menu_list_type type)
    return 0;
 }
 
-static void bgcolor_setalpha(float *bg, float alpha)
-{
-   bg[3]  = alpha;
-   bg[7]  = alpha;
-   bg[11] = alpha;
-   bg[15] = alpha;
-}
-
 static int mui_get_core_title(char *s, size_t len)
 {
    struct retro_system_info    *system = NULL;
@@ -703,7 +712,8 @@ static void mui_draw_bg(menu_display_ctx_draw_t *draw)
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
    draw->x              = 0;
    draw->y              = 0;
-   menu_display_ctl(MENU_DISPLAY_CTL_DRAW_BG, draw);
+   menu_display_ctl(MENU_DISPLAY_CTL_DRAW_BG,   draw);
+   menu_display_ctl(MENU_DISPLAY_CTL_DRAW,      draw);
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
 }
 
@@ -770,7 +780,6 @@ static void mui_frame(void *data)
    uint64_t *frame_count;
    menu_display_ctx_draw_t draw;
    mui_handle_t *mui               = (mui_handle_t*)data;
-   settings_t *settings            = config_get_ptr();
    const uint32_t normal_color     = 0x212121ff;
    const uint32_t hover_color      = 0x212121ff;
    const uint32_t title_color      = 0xffffffff;
@@ -800,20 +809,14 @@ static void mui_frame(void *data)
       draw.width              = width;
       draw.height             = height;
       draw.texture            = menu_display_white_texture;
-      draw.handle_alpha       = 0.75f;
-      draw.force_transparency = false;
       draw.color              = &white_transp_bg[0];
       draw.vertex             = NULL;
       draw.tex_coord          = NULL;
       draw.vertex_count       = 4;
       draw.prim_type          = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
 
-      if (
-            (settings->menu.pause_libretro
-             || !rarch_ctl(RARCH_CTL_IS_INITED, NULL) 
-             || rarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL)
-            )
-            && !draw.force_transparency && draw.texture)
+      if (!menu_display_ctl(MENU_DISPLAY_CTL_LIBRETRO_RUNNING, NULL)
+            && draw.texture)
          draw.color             = &white_bg[0];
 
       mui_draw_bg(&draw);
@@ -833,34 +836,27 @@ static void mui_frame(void *data)
       {
          background_rendered = true;
 
-         /* Set new opacity for transposed white background */
-         bgcolor_setalpha(white_transp_bg, 0.30);
+         menu_display_set_alpha(white_transp_bg, 0.30);
 
          memset(&draw, 0, sizeof(menu_display_ctx_draw_t));
 
          draw.width              = width;
          draw.height             = height;
          draw.texture            = mui->textures.bg;
-         draw.handle_alpha       = 0.75f;
-         draw.force_transparency = true;
          draw.color              = &white_transp_bg[0];
          draw.vertex             = NULL;
          draw.tex_coord          = NULL;
          draw.vertex_count       = 4;
          draw.prim_type          = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
 
-         if (
-               (settings->menu.pause_libretro
-                || !rarch_ctl(RARCH_CTL_IS_INITED, NULL) 
-                || rarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL)
-               )
-               && !draw.force_transparency && draw.texture)
+         if (!menu_display_ctl(MENU_DISPLAY_CTL_LIBRETRO_RUNNING, NULL)
+               && draw.texture)
             draw.color             = &white_bg[0];
 
          mui_draw_bg(&draw);
 
          /* Restore opacity of transposed white background */
-         bgcolor_setalpha(white_transp_bg, 0.90);
+         menu_display_set_alpha(white_transp_bg, 0.90);
       }
    }
 
@@ -870,9 +866,9 @@ static void mui_frame(void *data)
       return;
 
    if (background_rendered || libretro_running)
-      bgcolor_setalpha(lightblue_bg, 0.75);
+      menu_display_set_alpha(lightblue_bg, 0.75);
    else
-      bgcolor_setalpha(lightblue_bg, 1.0);
+      menu_display_set_alpha(lightblue_bg, 1.0);
 
    /* highlighted entry */
    mui_render_quad(mui, 0,
@@ -916,8 +912,16 @@ static void mui_frame(void *data)
    if (menu_entries_ctl(MENU_ENTRIES_CTL_SHOW_BACK, NULL))
    {
       title_margin = mui->icon_size;
-      mui_draw_icon(mui, mui->textures.list[MUI_TEXTURE_BACK],
-         0, 0, width, height, 0, 1, &pure_white[0]);
+      mui_draw_icon(
+            mui->icon_size,
+            mui->textures.list[MUI_TEXTURE_BACK],
+            0,
+            0,
+            width,
+            height,
+            0,
+            1,
+            &pure_white[0]);
    }
 
    ticker_limit = (width - mui->margin*2) / mui->glyph_width;
@@ -981,16 +985,14 @@ static void mui_frame(void *data)
       mui->box_message[0] = '\0';
    }
 
-   if (settings->menu.mouse.enable && (settings->video.fullscreen 
-            || !video_driver_ctl(RARCH_DISPLAY_CTL_HAS_WINDOWED, NULL)))
-      menu_display_draw_cursor(
-            &white_bg[0],
-            mui->cursor.size,
-            mui->textures.list[MUI_TEXTURE_POINTER],
-            menu_input_mouse_state(MENU_MOUSE_X_AXIS),
-            menu_input_mouse_state(MENU_MOUSE_Y_AXIS),
-            width,
-            height);
+   menu_display_draw_cursor(
+         &white_bg[0],
+         mui->cursor.size,
+         mui->textures.list[MUI_TEXTURE_POINTER],
+         menu_input_mouse_state(MENU_MOUSE_X_AXIS),
+         menu_input_mouse_state(MENU_MOUSE_Y_AXIS),
+         width,
+         height);
 
    menu_display_ctl(MENU_DISPLAY_CTL_RESTORE_CLEAR_COLOR, NULL);
    menu_display_ctl(MENU_DISPLAY_CTL_UNSET_VIEWPORT, NULL);
@@ -1005,7 +1007,7 @@ static void mui_font(void)
 
    menu_display_ctl(MENU_DISPLAY_CTL_FONT_SIZE, &font_size);
 
-   fill_pathname_join(mediapath, settings->assets_directory,
+   fill_pathname_join(mediapath, settings->directory.assets,
          "glui", sizeof(mediapath));
    fill_pathname_join(fontpath, mediapath,
          "Roboto-Regular.ttf", sizeof(fontpath));
@@ -1241,8 +1243,11 @@ static void mui_context_reset(void *data)
    if (!mui || !settings)
       return;
 
-   fill_pathname_join(iconpath, settings->assets_directory,
-         "glui", sizeof(iconpath));
+   fill_pathname_join(
+         iconpath,
+         settings->directory.assets,
+         "glui",
+         sizeof(iconpath));
    fill_pathname_slash(iconpath, sizeof(iconpath));
 
    mui_layout(mui);
@@ -1250,7 +1255,7 @@ static void mui_context_reset(void *data)
    menu_display_allocate_white_texture();
    mui_context_reset_textures(mui, iconpath);
 
-   rarch_task_push_image_load(settings->menu.wallpaper, "cb_menu_wallpaper",
+   rarch_task_push_image_load(settings->path.menu_wallpaper, "cb_menu_wallpaper",
          menu_display_handle_wallpaper_upload, NULL);
 }
 
@@ -1494,7 +1499,7 @@ static int mui_pointer_tap(void *userdata,
 
    if (y < header_height)
    {
-      menu_entries_pop_stack(&selection, 0);
+      menu_entries_pop_stack(&selection, 0, 1);
       menu_navigation_ctl(MENU_NAVIGATION_CTL_SET_SELECTION, &selection);
    }
    else if (y > height - mui->tabs_height)

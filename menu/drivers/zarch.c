@@ -176,8 +176,11 @@ static void zarch_zui_font(void)
 
    menu_display_ctl(MENU_DISPLAY_CTL_FONT_SIZE, &font_size);
 
-   fill_pathname_join(mediapath,
-         settings->assets_directory, "zarch", sizeof(mediapath));
+   fill_pathname_join(
+         mediapath,
+         settings->directory.assets,
+         "zarch",
+         sizeof(mediapath));
    fill_pathname_join(fontpath,
          mediapath, "Roboto-Condensed.ttf", sizeof(fontpath));
 
@@ -597,7 +600,7 @@ static int zarch_zui_render_lay_root_load(zui_t *zui,
       unsigned cwd_offset;
 
       if (!zui->load_cwd)
-         zui->load_cwd = strdup(settings->menu_content_directory);
+         zui->load_cwd = strdup(settings->directory.menu_content);
 
       if (!zui->load_dlist)
       {
@@ -965,26 +968,21 @@ static void zarch_frame(void *data)
    draw.width              = zui->width;
    draw.height             = zui->height;
    draw.texture            = zui->textures.bg;
-   draw.handle_alpha       = 0.75f;
-   draw.force_transparency = false;
    draw.color              = &coord_color[0];
    draw.vertex             = NULL;
    draw.tex_coord          = coord_draw.ptr;
    draw.vertex_count       = 4;
    draw.prim_type          = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
 
-   if (
-         (settings->menu.pause_libretro
-          || !rarch_ctl(RARCH_CTL_IS_INITED, NULL) 
-          || rarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL)
-         )
-      && !draw.force_transparency && draw.texture)
+   if (!menu_display_ctl(MENU_DISPLAY_CTL_LIBRETRO_RUNNING, NULL)
+         && draw.texture)
       draw.color             = &coord_color2[0];
 
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_BEGIN, NULL);
    draw.x              = 0;
    draw.y              = 0;
-   menu_display_ctl(MENU_DISPLAY_CTL_DRAW_BG, &draw);
+   menu_display_ctl(MENU_DISPLAY_CTL_DRAW_BG,   &draw);
+   menu_display_ctl(MENU_DISPLAY_CTL_DRAW,      &draw);
    menu_display_ctl(MENU_DISPLAY_CTL_BLEND_END, NULL);
 
    zui->rendering = false;
@@ -1031,8 +1029,8 @@ static void *zarch_init(void **userdata)
    zui->header_height  = 1000; /* dpi / 3; */
    zui->font_size       = 28;
 
-   if (!string_is_empty(settings->menu.wallpaper))
-      rarch_task_push_image_load(settings->menu.wallpaper,
+   if (!string_is_empty(settings->path.menu_wallpaper))
+      rarch_task_push_image_load(settings->path.menu_wallpaper,
             "cb_menu_wallpaper",
             menu_display_handle_wallpaper_upload, NULL);
 
@@ -1110,14 +1108,14 @@ static void zarch_context_reset(void *data)
    font_info.size    = zui->font_size;
 
    if (settings->video.font_enable)
-      font_info.path = settings->video.font_path;
+      font_info.path = settings->path.font;
 
    if (!menu_display_ctl(MENU_DISPLAY_CTL_FONT_MAIN_INIT, &font_info))
       RARCH_WARN("Failed to load font.");
 
    zarch_context_bg_destroy(zui);
 
-   rarch_task_push_image_load(settings->menu.wallpaper,
+   rarch_task_push_image_load(settings->path.menu_wallpaper,
          "cb_menu_wallpaper", menu_display_handle_wallpaper_upload, NULL);
 
    menu_display_allocate_white_texture();
@@ -1208,4 +1206,6 @@ menu_ctx_driver_t menu_ctx_zarch = {
    "zarch",
    NULL,
    NULL,
+   NULL,
+   NULL
 };

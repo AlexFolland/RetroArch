@@ -167,7 +167,9 @@ enum rarch_menu_ctl_state
    RARCH_MENU_CTL_ENVIRONMENT,
    RARCH_MENU_CTL_DRIVER_DATA_GET,
    RARCH_MENU_CTL_POINTER_TAP,
-   RARCH_MENU_CTL_BIND_INIT
+   RARCH_MENU_CTL_BIND_INIT,
+   RARCH_MENU_CTL_UPDATE_THUMBNAIL_PATH,
+   RARCH_MENU_CTL_UPDATE_THUMBNAIL_IMAGE
 };
 
 enum menu_file_type
@@ -199,6 +201,7 @@ enum menu_file_type
    MENU_FILE_DOWNLOAD_CORE,
    MENU_FILE_DOWNLOAD_CORE_CONTENT,
    MENU_FILE_DOWNLOAD_CORE_INFO,
+   MENU_FILE_DOWNLOAD_THUMBNAIL_CONTENT,
    MENU_FILE_DOWNLOAD_LAKKA,
    MENU_FILE_RDB,
    MENU_FILE_RDB_ENTRY,
@@ -234,6 +237,7 @@ enum menu_file_type
    MENU_SETTING_SUBGROUP,
    MENU_SETTING_HORIZONTAL_MENU,
    MENU_INFO_MESSAGE,
+   MENU_FILE_DOWNLOAD_THUMBNAIL,
    MENU_FILE_TYPE_T_LAST
 };
 
@@ -345,6 +349,8 @@ typedef struct menu_ctx_driver
    int (*pointer_tap)(void *data, unsigned x, unsigned y, unsigned ptr,
          menu_file_list_cbs_t *cbs,
          menu_entry_t *entry, unsigned action);
+   void (*update_thumbnail_path)(void *data, unsigned i);
+   void (*update_thumbnail_image)(void *data);
 } menu_ctx_driver_t;
 
 typedef struct menu_ctx_load_image
@@ -469,7 +475,7 @@ bool menu_driver_ctl(enum rarch_menu_ctl_state state, void *data);
 extern menu_ctx_driver_t menu_ctx_xui;
 extern menu_ctx_driver_t menu_ctx_rgui;
 extern menu_ctx_driver_t menu_ctx_mui;
-extern menu_ctx_driver_t menu_ctx_zr;
+extern menu_ctx_driver_t menu_ctx_nuklear;
 extern menu_ctx_driver_t menu_ctx_xmb;
 extern menu_ctx_driver_t menu_ctx_zarch;
 extern menu_ctx_driver_t menu_ctx_null;

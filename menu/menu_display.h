@@ -76,6 +76,7 @@ enum menu_display_ctl_state
    MENU_DISPLAY_CTL_DRAW,
    MENU_DISPLAY_CTL_DRAW_BG,
    MENU_DISPLAY_CTL_DRAW_GRADIENT,
+   MENU_DISPLAY_CTL_DRAW_PIPELINE,
    MENU_DISPLAY_CTL_ROTATE_Z,
    MENU_DISPLAY_CTL_TEX_COORDS_GET,
    MENU_DISPLAY_CTL_TIMEDATE,
@@ -112,17 +113,18 @@ typedef struct menu_display_ctx_draw
    float y;
    unsigned width;
    unsigned height;
-   bool dont_replace_coords;
    struct gfx_coords *coords;
    void *matrix_data;
    uintptr_t texture;
    enum menu_display_prim_type prim_type;
-   float handle_alpha;
-   bool force_transparency;
    float *color;
    const float *vertex;
    const float *tex_coord;
    size_t vertex_count;
+   struct
+   {
+      unsigned id;
+   } pipeline;
 } menu_display_ctx_draw_t;
 
 typedef struct menu_display_ctx_rotate_draw
@@ -150,6 +152,7 @@ typedef struct menu_display_ctx_datetime
 typedef struct menu_display_ctx_driver
 {
    void (*draw)(void *data);
+   void (*draw_pipeline)(void *data);
    void (*viewport)(void *data);
    void (*blend_begin)(void);
    void (*blend_end)(void);
@@ -193,6 +196,8 @@ void menu_display_draw_cursor(
 
 void menu_display_draw_text(const char *msg, int width, int height, 
       struct font_params *params);
+
+void menu_display_set_alpha(float *color, float alpha_value);
 
 extern uintptr_t menu_display_white_texture;
 

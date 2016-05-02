@@ -17,11 +17,11 @@
 #include <string.h>
 
 #include <windows.h>
-
 #include <boolean.h>
 #include <retro_miscellaneous.h>
 #include <dynamic/dylib.h>
 #include <lists/file_list.h>
+#include <file/file_path.h>
 
 #include "../frontend_driver.h"
 #include "../../general.h"
@@ -30,6 +30,9 @@
 #ifdef HAVE_MENU
 #include "../../menu/menu_driver.h"
 #endif
+
+#include <defaults.h>
+
 
 /* We only load this library once, so we let it be 
  * unloaded at application shutdown, since unloading 
@@ -108,6 +111,9 @@ static void frontend_win32_get_os(char *s, size_t len, int *major, int *minor)
 
    switch (*major)
    {
+      case 10:
+         strlcpy(s, "Windows 10", len);
+         break;
       case 6:
          switch (*minor)
          {
@@ -234,6 +240,64 @@ static void frontend_win32_environment_get(int *argc, char *argv[],
       void *args, void *params_data)
 {
    gfx_set_dwm();
+
+   fill_pathname_expand_special(g_defaults.dir.assets,
+      ":/assets", sizeof(g_defaults.dir.assets));
+   fill_pathname_expand_special(g_defaults.dir.audio_filter,
+      ":/filters/audio", sizeof(g_defaults.dir.audio_filter));
+   fill_pathname_expand_special(g_defaults.dir.video_filter,
+      ":/filters/video", sizeof(g_defaults.dir.video_filter));
+   fill_pathname_expand_special(g_defaults.dir.cheats,
+      ":/cheats", sizeof(g_defaults.dir.cheats));
+   fill_pathname_expand_special(g_defaults.dir.database,
+      ":/database/rdb", sizeof(g_defaults.dir.database));
+   fill_pathname_expand_special(g_defaults.dir.cursor,
+   ":/database/cursors", sizeof(g_defaults.dir.cursor));
+   fill_pathname_expand_special(g_defaults.dir.playlist,
+      ":/playlists", sizeof(g_defaults.dir.assets));
+   fill_pathname_expand_special(g_defaults.dir.remap,
+      ":/config/remap", sizeof(g_defaults.dir.remap));
+   fill_pathname_expand_special(g_defaults.dir.wallpapers,
+      ":/assets/wallpapers", sizeof(g_defaults.dir.wallpapers));
+   fill_pathname_expand_special(g_defaults.dir.thumbnails,
+      ":/thumbnails", sizeof(g_defaults.dir.thumbnails));
+   fill_pathname_expand_special(g_defaults.dir.overlay,
+      ":/overlays", sizeof(g_defaults.dir.overlay));
+   fill_pathname_expand_special(g_defaults.dir.osk_overlay,
+      ":/overlays", sizeof(g_defaults.dir.osk_overlay));
+   fill_pathname_expand_special(g_defaults.dir.osk_overlay,
+      ":/overlays", sizeof(g_defaults.dir.osk_overlay));
+   fill_pathname_expand_special(g_defaults.dir.core,
+      ":/cores", sizeof(g_defaults.dir.core));
+   fill_pathname_expand_special(g_defaults.dir.core_info,
+      ":/info", sizeof(g_defaults.dir.core_info));
+   fill_pathname_expand_special(g_defaults.dir.autoconfig,
+      ":/autoconfig", sizeof(g_defaults.dir.autoconfig));
+   fill_pathname_expand_special(g_defaults.dir.menu_config,
+      ":/config", sizeof(g_defaults.dir.menu_config));
+   fill_pathname_expand_special(g_defaults.dir.shader,
+      ":/shaders", sizeof(g_defaults.dir.shader));
+   fill_pathname_expand_special(g_defaults.dir.core_assets,
+      ":/downloads", sizeof(g_defaults.dir.core_assets));
+   fill_pathname_expand_special(g_defaults.dir.screenshot,
+      ":/screenshots", sizeof(g_defaults.dir.screenshot));
+
+/* don't force this in the driver anymore, these will be handled by
+   a dummy config file  so they can be reset to content dir
+
+   fill_pathname_expand_special(g_defaults.dir.sram,
+      ":/saves", sizeof(g_defaults.dir.sram));
+   fill_pathname_expand_special(g_defaults.dir.savestate,
+      ":/states", sizeof(g_defaults.dir.savestate));
+   fill_pathname_expand_special(g_defaults.dir.system,
+      ":/system", sizeof(g_defaults.dir.system));
+*/
+#ifdef HAVE_MENU
+#if defined(HAVE_OPENGL) || defined(HAVE_OPENGLES)
+   snprintf(g_defaults.settings.menu, sizeof(g_defaults.settings.menu), "xmb");
+#endif
+#endif
+
 }
 
 frontend_ctx_driver_t frontend_ctx_win32 = {

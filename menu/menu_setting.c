@@ -23,10 +23,17 @@
 
 #endif
 
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <unistd.h>
+#endif
+
 #include <lists/file_list.h>
 #include <file/file_path.h>
 #include <file/config_file.h>
 #include <string/stdstring.h>
+#include <lists/string_list.h>
 
 #include "../frontend/frontend_driver.h"
 
@@ -57,6 +64,10 @@
 
 #include "../tasks/tasks_internal.h"
 
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 
 struct rarch_setting_info
 {
@@ -739,6 +750,54 @@ static int setting_int_action_right_default(void *data, bool wraparound)
             *setting->value.target.integer = max;
       }
    }
+
+   return 0;
+}
+
+static int setting_string_action_left_audio_device(void *data, bool wraparound)
+{
+   int audio_device_index;
+   struct string_list *ptr  = NULL;
+   rarch_setting_t *setting = (rarch_setting_t*)data;
+   if (!audio_driver_ctl(RARCH_AUDIO_CTL_DEVICES_LIST_GET, &ptr))
+      return -1;
+
+   if (!ptr)
+      return -1;
+
+   /* Get index in the string list */
+   audio_device_index = string_list_find_elem(ptr,setting->value.target.string) - 1;
+   audio_device_index--;
+
+   /* Reset index if needed */
+   if (audio_device_index < 0)
+      audio_device_index = ptr->size - 1;
+
+   strlcpy(setting->value.target.string, ptr->elems[audio_device_index].data, setting->size);
+
+   return 0;
+}
+
+static int setting_string_action_right_audio_device(void *data, bool wraparound)
+{
+   int audio_device_index;
+   struct string_list *ptr  = NULL;
+   rarch_setting_t *setting = (rarch_setting_t*)data;
+   if (!audio_driver_ctl(RARCH_AUDIO_CTL_DEVICES_LIST_GET, &ptr))
+      return -1;
+
+   if (!ptr)
+      return -1;
+
+   /* Get index in the string list */
+   audio_device_index = string_list_find_elem(ptr,setting->value.target.string) -1;
+   audio_device_index++;
+
+   /* Reset index if needed */
+   if (audio_device_index == ptr->size)
+      audio_device_index = 0;
+
+   strlcpy(setting->value.target.string, ptr->elems[audio_device_index].data, setting->size);
 
    return 0;
 }
@@ -3067,37 +3126,60 @@ static void overlay_enable_toggle_change_handler(void *data)
 }
 #endif
 
-#ifdef HAVE_LAKKA
-
-void lakka_service_toggle(const char *path, bool enable)
+#ifdef HAVE_SYSTEMD
+static void systemd_service_toggle(const char *path, char *unit, bool enable)
 {
+   int pid = fork();
+   char* args[] = {(char*)"systemctl", NULL, NULL, NULL};
+
+   if (enable)
+      args[1] = (char*)"start";
+   else
+      args[1] = (char*)"stop";
+   args[2] = unit;
+
    if (enable)
       fclose(fopen(path, "w"));
    else
       remove(path);
+
+   if (pid == 0)
+      execvp(args[0], args);
+
    return;
 }
 
 static void ssh_enable_toggle_change_handler(void *data)
 {
+   bool enable           = false;
    settings_t *settings  = config_get_ptr();
-   lakka_service_toggle(LAKKA_SSH_PATH,
-         settings && settings->ssh_enable);
-   return;
+   if (settings && settings->ssh_enable)
+      enable = true;
+
+   systemd_service_toggle(LAKKA_SSH_PATH, (char*)"sshd.service",
+         enable);
 }
+
 static void samba_enable_toggle_change_handler(void *data)
 {
+   bool enable           = false;
    settings_t *settings  = config_get_ptr();
-   lakka_service_toggle(LAKKA_SAMBA_PATH,
-         settings && settings->samba_enable);
-   return;
+   if (settings && settings->samba_enable)
+      enable = true;
+
+   systemd_service_toggle(LAKKA_SAMBA_PATH, (char*)"smbd.service",
+         enable);
 }
+
 static void bluetooth_enable_toggle_change_handler(void *data)
 {
+   bool enable           = false;
    settings_t *settings  = config_get_ptr();
-   lakka_service_toggle(LAKKA_BLUETOOTH_PATH,
-         settings && settings->bluetooth_enable);
-   return;
+   if (settings && settings->bluetooth_enable)
+      enable = true;
+
+   systemd_service_toggle(LAKKA_BLUETOOTH_PATH, (char*)"bluetooth.service",
+         enable);
 }
 #endif
 
@@ -3436,8 +3518,8 @@ static bool setting_append_list(
                      &group_info,
                      &subgroup_info,
                      parent_group);
-               (*list)[list_info->index - 1].size         = sizeof(settings->libretro);
-               (*list)[list_info->index - 1].value.target.string = settings->libretro;
+               (*list)[list_info->index - 1].size         = sizeof(settings->path.libretro);
+               (*list)[list_info->index - 1].value.target.string = settings->path.libretro;
                (*list)[list_info->index - 1].values       = ext_name;
                menu_settings_list_current_add_cmd(list, list_info, EVENT_CMD_LOAD_CORE);
                settings_data_list_current_add_flags(list, list_info, SD_FLAG_BROWSER_ACTION);
@@ -4671,11 +4753,11 @@ static bool setting_append_list(
 
          CONFIG_PATH(
                list, list_info,
-               settings->video.softfilter_plugin,
-               sizeof(settings->video.softfilter_plugin),
+               settings->path.softfilter_plugin,
+               sizeof(settings->path.softfilter_plugin),
                menu_hash_to_str(MENU_LABEL_VIDEO_FILTER),
                menu_hash_to_str(MENU_LABEL_VALUE_VIDEO_FILTER),
-               settings->video.filter_dir,
+               settings->directory.video_filter,
                &group_info,
                &subgroup_info,
                parent_group,
@@ -4877,6 +4959,8 @@ static bool setting_append_list(
                general_write_handler,
                general_read_handler);
          settings_data_list_current_add_flags(list, list_info, SD_FLAG_ALLOW_INPUT | SD_FLAG_ADVANCED);
+         (*list)[list_info->index - 1].action_left   = &setting_string_action_left_audio_device;
+         (*list)[list_info->index - 1].action_right  = &setting_string_action_right_audio_device;
 
          CONFIG_UINT(
                list, list_info,
@@ -4893,11 +4977,11 @@ static bool setting_append_list(
 
          CONFIG_PATH(
                list, list_info,
-               settings->audio.dsp_plugin,
-               sizeof(settings->audio.dsp_plugin),
+               settings->path.audio_dsp_plugin,
+               sizeof(settings->path.audio_dsp_plugin),
                menu_hash_to_str(MENU_LABEL_AUDIO_DSP_PLUGIN),
                menu_hash_to_str(MENU_LABEL_VALUE_AUDIO_DSP_PLUGIN),
-               settings->audio.filter_dir,
+               settings->directory.audio_filter,
                &group_info,
                &subgroup_info,
                parent_group,
@@ -5387,8 +5471,8 @@ static bool setting_append_list(
 
          CONFIG_PATH(
                list, list_info,
-               settings->video.font_path,
-               sizeof(settings->video.font_path),
+               settings->path.font,
+               sizeof(settings->path.font),
                menu_hash_to_str(MENU_LABEL_VIDEO_FONT_PATH),
                menu_hash_to_str(MENU_LABEL_VALUE_VIDEO_FONT_PATH),
                "",
@@ -5515,11 +5599,11 @@ static bool setting_append_list(
 
          CONFIG_PATH(
                list, list_info,
-               settings->input.overlay,
-               sizeof(settings->input.overlay),
+               settings->path.overlay,
+               sizeof(settings->path.overlay),
                menu_hash_to_str(MENU_LABEL_OVERLAY_PRESET),
                menu_hash_to_str(MENU_LABEL_VALUE_OVERLAY_PRESET),
-               settings->overlay_directory,
+               settings->directory.overlay,
                &group_info,
                &subgroup_info,
                parent_group,
@@ -5567,8 +5651,8 @@ static bool setting_append_list(
 
          CONFIG_PATH(
                list, list_info,
-               settings->osk.overlay,
-               sizeof(settings->osk.overlay),
+               settings->path.osk_overlay,
+               sizeof(settings->path.osk_overlay),
                menu_hash_to_str(MENU_LABEL_KEYBOARD_OVERLAY_PRESET),
                menu_hash_to_str(MENU_LABEL_VALUE_KEYBOARD_OVERLAY_PRESET),
                global->dir.osk_overlay,
@@ -5595,8 +5679,8 @@ static bool setting_append_list(
 
          CONFIG_PATH(
                list, list_info,
-               settings->menu.wallpaper,
-               sizeof(settings->menu.wallpaper),
+               settings->path.menu_wallpaper,
+               sizeof(settings->path.menu_wallpaper),
                menu_hash_to_str(MENU_LABEL_MENU_WALLPAPER),
                menu_hash_to_str(MENU_LABEL_VALUE_MENU_WALLPAPER),
                "",
@@ -5877,10 +5961,10 @@ static bool setting_append_list(
 
             CONFIG_BOOL(
                   list, list_info,
-                  &settings->menu.xmb_shadows,
-                  menu_hash_to_str(MENU_LABEL_XMB_SHADOWS),
-                  menu_hash_to_str(MENU_LABEL_VALUE_XMB_SHADOWS),
-                  xmb_shadows,
+                  &settings->menu.xmb_shadows_enable,
+                  menu_hash_to_str(MENU_LABEL_XMB_SHADOWS_ENABLE),
+                  menu_hash_to_str(MENU_LABEL_VALUE_XMB_SHADOWS_ENABLE),
+                  xmb_shadows_enable,
                   menu_hash_to_str(MENU_VALUE_OFF),
                   menu_hash_to_str(MENU_VALUE_ON),
                   &group_info,
@@ -5888,6 +5972,32 @@ static bool setting_append_list(
                   parent_group,
                   general_write_handler,
                   general_read_handler);
+
+            CONFIG_UINT(
+                  list, list_info,
+                  &settings->menu.shader_pipeline,
+                  menu_hash_to_str(MENU_LABEL_XMB_RIBBON_ENABLE),
+                  menu_hash_to_str(MENU_LABEL_VALUE_XMB_RIBBON_ENABLE),
+                  menu_shader_pipeline,
+                  &group_info,
+                  &subgroup_info,
+                  parent_group,
+                  general_write_handler,
+                  general_read_handler);
+            menu_settings_list_current_add_range(list, list_info, 0, 2, 1, true, true);
+
+            CONFIG_UINT(
+                  list, list_info,
+                  &settings->menu.background_gradient,
+                  menu_hash_to_str(MENU_LABEL_XMB_GRADIENT),
+                  menu_hash_to_str(MENU_LABEL_VALUE_XMB_GRADIENT),
+                  menu_background_gradient,
+                  &group_info,
+                  &subgroup_info,
+                  parent_group,
+                  general_write_handler,
+                  general_read_handler);
+            menu_settings_list_current_add_range(list, list_info, 0, 8, 1, true, true);
          }
 
          CONFIG_BOOL(
@@ -5909,7 +6019,7 @@ static bool setting_append_list(
                &settings->menu.thumbnails,
                menu_hash_to_str(MENU_LABEL_THUMBNAILS),
                menu_hash_to_str(MENU_LABEL_VALUE_THUMBNAILS),
-               0,
+               menu_thumbnails_default,
                &group_info,
                &subgroup_info,
                parent_group,
@@ -6486,7 +6596,7 @@ static bool setting_append_list(
          break;
       case SETTINGS_LIST_LAKKA_SERVICES:
          {
-#if defined(HAVE_LAKKA)
+#if defined(HAVE_SYSTEMD)
             START_GROUP(list, list_info, &group_info,
                   menu_hash_to_str(MENU_LABEL_VALUE_LAKKA_SERVICES),
                   parent_group);
@@ -6678,8 +6788,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->system_directory,
-               sizeof(settings->system_directory),
+               settings->directory.system,
+               sizeof(settings->directory.system),
                menu_hash_to_str(MENU_LABEL_SYSTEM_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_SYSTEM_DIRECTORY),
                "",
@@ -6696,8 +6806,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->core_assets_directory,
-               sizeof(settings->core_assets_directory),
+               settings->directory.core_assets,
+               sizeof(settings->directory.core_assets),
                menu_hash_to_str(MENU_LABEL_CORE_ASSETS_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_CORE_ASSETS_DIRECTORY),
                "",
@@ -6714,8 +6824,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->assets_directory,
-               sizeof(settings->assets_directory),
+               settings->directory.assets,
+               sizeof(settings->directory.assets),
                menu_hash_to_str(MENU_LABEL_ASSETS_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_ASSETS_DIRECTORY),
                "",
@@ -6732,8 +6842,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->dynamic_wallpapers_directory,
-               sizeof(settings->dynamic_wallpapers_directory),
+               settings->directory.dynamic_wallpapers,
+               sizeof(settings->directory.dynamic_wallpapers),
                menu_hash_to_str(MENU_LABEL_DYNAMIC_WALLPAPERS_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_DYNAMIC_WALLPAPERS_DIRECTORY),
                "",
@@ -6750,8 +6860,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->thumbnails_directory,
-               sizeof(settings->thumbnails_directory),
+               settings->directory.thumbnails,
+               sizeof(settings->directory.thumbnails),
                menu_hash_to_str(MENU_LABEL_THUMBNAILS_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_THUMBNAILS_DIRECTORY),
                "",
@@ -6768,8 +6878,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->menu_content_directory,
-               sizeof(settings->menu_content_directory),
+               settings->directory.menu_content,
+               sizeof(settings->directory.menu_content),
                menu_hash_to_str(MENU_LABEL_RGUI_BROWSER_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_RGUI_BROWSER_DIRECTORY),
                "",
@@ -6787,8 +6897,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->menu_config_directory,
-               sizeof(settings->menu_config_directory),
+               settings->directory.menu_config,
+               sizeof(settings->directory.menu_config),
                menu_hash_to_str(MENU_LABEL_RGUI_CONFIG_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_RGUI_CONFIG_DIRECTORY),
                "",
@@ -6806,8 +6916,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->libretro_directory,
-               sizeof(settings->libretro_directory),
+               settings->directory.libretro,
+               sizeof(settings->directory.libretro),
                menu_hash_to_str(MENU_LABEL_LIBRETRO_DIR_PATH),
                menu_hash_to_str(MENU_LABEL_VALUE_LIBRETRO_DIR_PATH),
                g_defaults.dir.core,
@@ -6825,8 +6935,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->libretro_info_path,
-               sizeof(settings->libretro_info_path),
+               settings->path.libretro_info,
+               sizeof(settings->path.libretro_info),
                menu_hash_to_str(MENU_LABEL_LIBRETRO_INFO_PATH),
                menu_hash_to_str(MENU_LABEL_VALUE_LIBRETRO_INFO_PATH),
                g_defaults.dir.core_info,
@@ -6845,8 +6955,8 @@ static bool setting_append_list(
 #ifdef HAVE_LIBRETRODB
          CONFIG_DIR(
                list, list_info,
-               settings->content_database,
-               sizeof(settings->content_database),
+               settings->path.content_database,
+               sizeof(settings->path.content_database),
                menu_hash_to_str(MENU_LABEL_CONTENT_DATABASE_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_CONTENT_DATABASE_DIRECTORY),
                "",
@@ -6863,8 +6973,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->cursor_directory,
-               sizeof(settings->cursor_directory),
+               settings->directory.cursor,
+               sizeof(settings->directory.cursor),
                menu_hash_to_str(MENU_LABEL_CURSOR_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_CURSOR_DIRECTORY),
                "",
@@ -6882,8 +6992,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->cheat_database,
-               sizeof(settings->cheat_database),
+               settings->path.cheat_database,
+               sizeof(settings->path.cheat_database),
                menu_hash_to_str(MENU_LABEL_CHEAT_DATABASE_PATH),
                menu_hash_to_str(MENU_LABEL_VALUE_CHEAT_DATABASE_PATH),
                "",
@@ -6900,8 +7010,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->video.filter_dir,
-               sizeof(settings->video.filter_dir),
+               settings->directory.video_filter,
+               sizeof(settings->directory.video_filter),
                menu_hash_to_str(MENU_LABEL_VIDEO_FILTER_DIR),
                menu_hash_to_str(MENU_LABEL_VALUE_VIDEO_FILTER_DIR),
                "",
@@ -6918,8 +7028,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->audio.filter_dir,
-               sizeof(settings->audio.filter_dir),
+               settings->directory.audio_filter,
+               sizeof(settings->directory.audio_filter),
                menu_hash_to_str(MENU_LABEL_AUDIO_FILTER_DIR),
                menu_hash_to_str(MENU_LABEL_VALUE_AUDIO_FILTER_DIR),
                "",
@@ -6936,8 +7046,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->video.shader_dir,
-               sizeof(settings->video.shader_dir),
+               settings->directory.video_shader,
+               sizeof(settings->directory.video_shader),
                menu_hash_to_str(MENU_LABEL_VIDEO_SHADER_DIR),
                menu_hash_to_str(MENU_LABEL_VALUE_VIDEO_SHADER_DIR),
                g_defaults.dir.shader,
@@ -6993,8 +7103,8 @@ static bool setting_append_list(
 #ifdef HAVE_OVERLAY
          CONFIG_DIR(
                list, list_info,
-               settings->overlay_directory,
-               sizeof(settings->overlay_directory),
+               settings->directory.overlay,
+               sizeof(settings->directory.overlay),
                menu_hash_to_str(MENU_LABEL_OVERLAY_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_OVERLAY_DIRECTORY),
                g_defaults.dir.overlay,
@@ -7030,8 +7140,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->screenshot_directory,
-               sizeof(settings->screenshot_directory),
+               settings->directory.screenshot,
+               sizeof(settings->directory.screenshot),
                menu_hash_to_str(MENU_LABEL_SCREENSHOT_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_SCREENSHOT_DIRECTORY),
                "",
@@ -7048,8 +7158,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->input.autoconfig_dir,
-               sizeof(settings->input.autoconfig_dir),
+               settings->directory.autoconfig,
+               sizeof(settings->directory.autoconfig),
                menu_hash_to_str(MENU_LABEL_JOYPAD_AUTOCONFIG_DIR),
                menu_hash_to_str(MENU_LABEL_VALUE_JOYPAD_AUTOCONFIG_DIR),
                "",
@@ -7066,8 +7176,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->input_remapping_directory,
-               sizeof(settings->input_remapping_directory),
+               settings->directory.input_remapping,
+               sizeof(settings->directory.input_remapping),
                menu_hash_to_str(MENU_LABEL_INPUT_REMAPPING_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_INPUT_REMAPPING_DIRECTORY),
                "",
@@ -7084,8 +7194,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->playlist_directory,
-               sizeof(settings->playlist_directory),
+               settings->directory.playlist,
+               sizeof(settings->directory.playlist),
                menu_hash_to_str(MENU_LABEL_PLAYLIST_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_PLAYLIST_DIRECTORY),
                "",
@@ -7138,8 +7248,8 @@ static bool setting_append_list(
 
          CONFIG_DIR(
                list, list_info,
-               settings->cache_directory,
-               sizeof(settings->cache_directory),
+               settings->directory.cache,
+               sizeof(settings->directory.cache),
                menu_hash_to_str(MENU_LABEL_CACHE_DIRECTORY),
                menu_hash_to_str(MENU_LABEL_VALUE_CACHE_DIRECTORY),
                "",

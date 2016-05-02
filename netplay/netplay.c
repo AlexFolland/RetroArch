@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include <net/net_compat.h>
+#include <net/net_socket.h>
 #include <retro_endianness.h>
 
 #include "netplay_private.h"
@@ -199,13 +200,13 @@ static bool get_self_input_state(netplay_t *netplay)
 static bool netplay_cmd_ack(netplay_t *netplay)
 {
    uint32_t cmd = htonl(NETPLAY_CMD_ACK);
-   return socket_send_all_blocking(netplay->fd, &cmd, sizeof(cmd));
+   return socket_send_all_blocking(netplay->fd, &cmd, sizeof(cmd), false);
 }
 
 static bool netplay_cmd_nak(netplay_t *netplay)
 {
    uint32_t cmd = htonl(NETPLAY_CMD_NAK);
-   return socket_send_all_blocking(netplay->fd, &cmd, sizeof(cmd));
+   return socket_send_all_blocking(netplay->fd, &cmd, sizeof(cmd), false);
 }
 
 static bool netplay_get_response(netplay_t *netplay)
@@ -658,7 +659,7 @@ static int init_tcp_connection(const struct addrinfo *res,
 
    if (server)
    {
-      if (connect(fd, res->ai_addr, res->ai_addrlen) < 0)
+      if (socket_connect(fd, (void*)res, false) < 0)
       {
          ret = false;
          goto end;
@@ -666,10 +667,7 @@ static int init_tcp_connection(const struct addrinfo *res,
    }
    else
    {
-      int yes = 1;
-      setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&yes, sizeof(int));
-
-      if (bind(fd, res->ai_addr, res->ai_addrlen) < 0 ||
+      if (  !socket_bind(fd, (void*)res) || 
             listen(fd, spectate ? MAX_SPECTATORS : 1) < 0)
       {
          ret = false;
@@ -706,9 +704,8 @@ static bool init_tcp_socket(netplay_t *netplay, const char *server,
    char port_buf[16]               = {0};
    bool ret                        = false;
    const struct addrinfo *tmp_info = NULL;
-   struct addrinfo hints, *res     = NULL;
-
-   memset(&hints, 0, sizeof(hints));
+   struct addrinfo *res            = NULL;
+   struct addrinfo hints           = {0};
 
 #if defined(_WIN32) || defined(HAVE_SOCKET_LEGACY)
    hints.ai_family = AF_INET;
@@ -762,46 +759,17 @@ static bool init_tcp_socket(netplay_t *netplay, const char *server,
 static bool init_udp_socket(netplay_t *netplay, const char *server,
       uint16_t port)
 {
-   char port_buf[16]     = {0};
-   struct addrinfo hints = {0};
+   int fd = socket_init((void**)&netplay->addr, port, server, SOCKET_TYPE_DATAGRAM);
 
-   memset(&hints, 0, sizeof(hints));
-#if defined(_WIN32) || defined(HAVE_SOCKET_LEGACY)
-   hints.ai_family = AF_INET;
-#else
-   hints.ai_family = AF_UNSPEC;
-#endif
-   hints.ai_socktype = SOCK_DGRAM;
-   if (!server)
-      hints.ai_flags = AI_PASSIVE;
+   if (fd < 0)
+      goto error;
 
-   snprintf(port_buf, sizeof(port_buf), "%hu", (unsigned short)port);
-
-   if (getaddrinfo_retro(server, port_buf, &hints, &netplay->addr) < 0)
-      return false;
-
-   if (!netplay->addr)
-      return false;
-
-   netplay->udp_fd = socket(netplay->addr->ai_family,
-         netplay->addr->ai_socktype, netplay->addr->ai_protocol);
-
-   if (netplay->udp_fd < 0)
-   {
-      RARCH_ERR("Failed to initialize socket.\n");
-      return false;
-   }
+   netplay->udp_fd = fd;
 
    if (!server)
    {
       /* Not sure if we have to do this for UDP, but hey :) */
-      int yes = 1;
-
-      setsockopt(netplay->udp_fd, SOL_SOCKET, SO_REUSEADDR,
-            (const char*)&yes, sizeof(int));
-
-      if (bind(netplay->udp_fd, netplay->addr->ai_addr,
-               netplay->addr->ai_addrlen) < 0)
+      if (!socket_bind(netplay->udp_fd, (void*)netplay->addr))
       {
          RARCH_ERR("Failed to bind socket.\n");
          socket_close(netplay->udp_fd);
@@ -813,6 +781,10 @@ static bool init_udp_socket(netplay_t *netplay, const char *server,
    }
 
    return true;
+
+error:
+   RARCH_ERR("Failed to initialize socket.\n");
+   return false;
 }
 
 static bool init_socket(netplay_t *netplay, const char *server, uint16_t port)
@@ -896,10 +868,10 @@ static bool netplay_send_raw_cmd(netplay_t *netplay, uint32_t cmd,
    cmd = (cmd << 16) | (size & 0xffff);
    cmd = htonl(cmd);
 
-   if (!socket_send_all_blocking(netplay->fd, &cmd, sizeof(cmd)))
+   if (!socket_send_all_blocking(netplay->fd, &cmd, sizeof(cmd), false))
       return false;
 
-   if (!socket_send_all_blocking(netplay->fd, data, size))
+   if (!socket_send_all_blocking(netplay->fd, data, size, false))
       return false;
 
    return true;

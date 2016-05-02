@@ -20,6 +20,13 @@
 extern "C" {
 #endif
 
+#define CB_THUMBNAILS_UPDATER_DOWNLOAD                                         0xf4ee156bU
+
+#define MENU_LABEL_THUMBNAILS_UPDATER_LIST                                     0xff70176bU
+#define MENU_LABEL_VALUE_THUMBNAILS_UPDATER_LIST                               0x75028b11U
+
+#define MENU_LABEL_DEFERRED_THUMBNAILS_UPDATER_LIST                            0x364dfa2bU
+
 #define MENU_LABEL_MENU_LINEAR_FILTER                                          0x5fe9128cU
 #define MENU_LABEL_VALUE_MENU_LINEAR_FILTER                                    0x192de208U
 
@@ -388,8 +395,12 @@ extern "C" {
 #define MENU_LABEL_VALUE_XMB_FONT                                              0x0020337E7
 #define MENU_LABEL_XMB_THEME                                                   0x824c5a7eU
 #define MENU_LABEL_VALUE_XMB_THEME                                             0x3603f65fU
-#define MENU_LABEL_XMB_SHADOWS                                                 0xf9859e24U
-#define MENU_LABEL_VALUE_XMB_SHADOWS                                           0x7993b645U
+#define MENU_LABEL_XMB_GRADIENT                                                0x18e63099U
+#define MENU_LABEL_VALUE_XMB_GRADIENT                                          0x8a520681U
+#define MENU_LABEL_XMB_SHADOWS_ENABLE                                          0xd0fcc82aU
+#define MENU_LABEL_VALUE_XMB_SHADOWS_ENABLE                                    0x5982498cU
+#define MENU_LABEL_XMB_RIBBON_ENABLE                                           0x8e89c3edU
+#define MENU_LABEL_VALUE_XMB_RIBBON_ENABLE                                     0xd53e09c8U
 #define MENU_LABEL_VOLUME_UP                                                   0xa66e9681U
 #define MENU_LABEL_VOLUME_DOWN                                                 0xfc64f3d4U
 #define MENU_LABEL_LOG_VERBOSITY                                               0x6648c96dU
@@ -1150,6 +1161,8 @@ extern "C" {
 
 #define MENU_LABEL_INPUT_ICADE_ENABLE                                          0xcd534dd0U
 #define MENU_LABEL_VALUE_INPUT_ICADE_ENABLE                                    0x67b18ee2U
+
+#define CB_CORE_THUMBNAILS_DOWNLOAD                                            0xc9d6519fU
 
 const char *menu_hash_to_str_de(uint32_t hash);
 int menu_hash_get_help_de(uint32_t hash, char *s, size_t len);

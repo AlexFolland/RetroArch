@@ -84,7 +84,7 @@ void menu_shader_manager_init(menu_handle_t *menu)
             sizeof(menu->default_slangp));
    }
 
-   ext      = path_get_extension(settings->video.shader_path);
+   ext      = path_get_extension(settings->path.shader);
    ext_hash = menu_hash_calculate(ext);
 
    switch (ext_hash)
@@ -92,13 +92,13 @@ void menu_shader_manager_init(menu_handle_t *menu)
       case MENU_VALUE_GLSLP:
       case MENU_VALUE_CGP:
       case MENU_VALUE_SLANGP:
-         conf = config_file_new(settings->video.shader_path);
+         conf = config_file_new(settings->path.shader);
          if (conf)
          {
             if (video_shader_read_conf_cgp(conf, shader))
             {
                video_shader_resolve_relative(shader,
-                     settings->video.shader_path);
+                     settings->path.shader);
                video_shader_resolve_parameters(conf, shader);
             }
             config_file_free(conf);
@@ -107,15 +107,15 @@ void menu_shader_manager_init(menu_handle_t *menu)
       case MENU_VALUE_GLSL:
       case MENU_VALUE_CG:
       case MENU_VALUE_SLANG:
-         strlcpy(shader->pass[0].source.path, settings->video.shader_path,
+         strlcpy(shader->pass[0].source.path, settings->path.shader,
                sizeof(shader->pass[0].source.path));
          shader->passes = 1;
          break;
       default:
          {
             char preset_path[PATH_MAX_LENGTH];
-            const char *shader_dir = *settings->video.shader_dir ?
-               settings->video.shader_dir : settings->system_directory;
+            const char *shader_dir = *settings->directory.video_shader ?
+               settings->directory.video_shader : settings->directory.system;
 
             fill_pathname_join(preset_path, shader_dir,
                   "menu.glslp", sizeof(preset_path));
@@ -172,9 +172,9 @@ void menu_shader_manager_set_preset(struct video_shader *shader,
 
    /* Makes sure that we use Menu Preset shader on driver reinit.
     * Only do this when the cgp actually works to avoid potential errors. */
-   strlcpy(settings->video.shader_path,
+   strlcpy(settings->path.shader,
          preset_path ? preset_path : "",
-         sizeof(settings->video.shader_path));
+         sizeof(settings->path.shader));
    settings->video.shader_enable = true;
 
    if (!preset_path || !shader)
@@ -214,8 +214,9 @@ void menu_shader_manager_save_preset(
       const char *basename, bool apply)
 {
 #ifdef HAVE_SHADER_MANAGER
-   char buffer[PATH_MAX_LENGTH], config_directory[PATH_MAX_LENGTH],
-        preset_path[PATH_MAX_LENGTH];
+   char buffer[PATH_MAX_LENGTH];
+   char config_directory[PATH_MAX_LENGTH];
+   char preset_path[PATH_MAX_LENGTH];
    unsigned d, type            = RARCH_SHADER_NONE;
    const char *dirs[3]         = {0};
    config_file_t *conf         = NULL;
@@ -290,11 +291,13 @@ void menu_shader_manager_save_preset(
    }
 
    if (*global->path.config)
-      fill_pathname_basedir(config_directory,
-            global->path.config, sizeof(config_directory));
+      fill_pathname_basedir(
+            config_directory,
+            global->path.config,
+            sizeof(config_directory));
 
-   dirs[0] = settings->video.shader_dir;
-   dirs[1] = settings->menu_config_directory;
+   dirs[0] = settings->directory.video_shader;
+   dirs[1] = settings->directory.menu_config;
    dirs[2] = config_directory;
 
    if (!(conf = (config_file_t*)config_file_new(NULL)))

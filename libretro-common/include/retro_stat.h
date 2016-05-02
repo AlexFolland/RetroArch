@@ -26,7 +26,11 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#include <retro_common_api.h>
+
 #include <boolean.h>
+
+RETRO_BEGIN_DECLS
 
 /**
  * path_is_directory:
@@ -53,5 +57,7 @@ int32_t path_get_size(const char *path);
  * Returns: true (1) if directory could be created, otherwise false (0).
  **/
 bool mkdir_norecurse(const char *dir);
+
+RETRO_END_DECLS
 
 #endif

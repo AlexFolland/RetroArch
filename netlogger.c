@@ -25,6 +25,7 @@
 
 #include <retro_miscellaneous.h>
 #include <net/net_compat.h>
+#include <net/net_socket.h>
 
 #include "verbosity.h"
 
@@ -40,9 +41,9 @@ static int g_sid;
 static struct sockaddr_in target;
 static char sendbuf[4096];
 #ifdef VITA
-static void *net_memory = NULL;
 #define NET_INIT_SIZE 512*1024
 #endif
+static void *net_memory = NULL;
 
 static int network_interface_up(struct sockaddr_in *target, int index,
       const char *ip_address, unsigned udp_port, int *s)
@@ -53,19 +54,21 @@ static int network_interface_up(struct sockaddr_in *target, int index,
    if (sceNetShowNetstat() == PSP2_NET_ERROR_ENOTINIT)
    {
       SceNetInitParam initparam;
-      net_memory = malloc(NET_INIT_SIZE);
+      net_memory       = malloc(NET_INIT_SIZE);
 
       initparam.memory = net_memory;
-      initparam.size = NET_INIT_SIZE;
-      initparam.flags = 0;
+      initparam.size   = NET_INIT_SIZE;
+      initparam.flags  = 0;
 
       sceNetInit(&initparam);
    }
-   *s                 = sceNetSocket("RA_netlogger", PSP2_NET_AF_INET, PSP2_NET_SOCK_DGRAM, 0);
+
+   *s                 = sceNetSocket("RA_netlogger",
+         PSP2_NET_AF_INET, PSP2_NET_SOCK_DGRAM, 0);
+
    target->sin_family = PSP2_NET_AF_INET;
    target->sin_port   = sceNetHtons(udp_port);
-
-   sceNetInetPton(PSP2_NET_AF_INET, ip_address, &target->sin_addr);
+   target->sin_addr   = inet_aton(ip_address);
 #else
 
 #if defined(__CELLOS_LV2__) && !defined(__PSL1GHT__)
@@ -111,29 +114,6 @@ static int network_interface_up(struct sockaddr_in *target, int index,
    return 0;
 }
 
-static int network_interface_down(struct sockaddr_in *target, int *s)
-{
-   int ret = 0;
-#if defined(_WIN32) && !defined(_XBOX360)
-   /* WinSock has headers from the stone age. */
-   ret = closesocket(*s);
-#elif defined(__CELLOS_LV2__)
-   ret = socketclose(*s);
-#elif defined(VITA)
-   if (net_memory)
-      free(net_memory);
-   sceNetSocketClose(*s);
-#else
-   ret = close(*s);
-#endif
-#if defined(__CELLOS_LV2__) && !defined(__PSL1GHT__)
-   cellNetCtlTerm();
-#elif defined(GEKKO) && !defined(HW_DOL)
-   net_deinit();
-#endif
-   return ret;
-}
-
 void logger_init (void)
 {
    if (network_interface_up(&target, 1,
@@ -143,7 +123,14 @@ void logger_init (void)
 
 void logger_shutdown (void)
 {
-   if (network_interface_down(&target, &g_sid) < 0)
+   int ret = socket_close(g_sid);
+
+   network_deinit();
+
+   if (net_memory)
+      free(net_memory);
+
+   if (ret < 0)
       printf("Could not deinitialize network logger interface.\n");
 }
 
@@ -161,5 +148,11 @@ void logger_send_v(const char *__format, va_list args)
    int len;
    vsnprintf(sendbuf,4000,__format, args);
    len = strlen(sendbuf);
-   sendto(g_sid,sendbuf,len,MSG_DONTWAIT,(struct sockaddr*)&target,sizeof(target));
+
+   sendto(g_sid,
+         sendbuf,
+         len,
+         MSG_DONTWAIT,
+         (struct sockaddr*)&target,
+         sizeof(target));
 }

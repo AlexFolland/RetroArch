@@ -46,8 +46,8 @@ static const menu_ctx_driver_t *menu_ctx_drivers[] = {
 #if defined(HAVE_MATERIALUI)
    &menu_ctx_mui,
 #endif
-#if defined(HAVE_ZAHNRAD)
-   &menu_ctx_zr,
+#if defined(HAVE_NUKLEAR)
+   &menu_ctx_nuklear,
 #endif
 #if defined(HAVE_XMB)
    &menu_ctx_xmb,
@@ -163,8 +163,8 @@ static bool menu_init(menu_handle_t *menu_data)
    }
 
    if (      settings->bundle_assets_extract_enable
-         && !string_is_empty(settings->bundle_assets_src_path) 
-         && !string_is_empty(settings->bundle_assets_dst_path)
+         && !string_is_empty(settings->path.bundle_assets_src) 
+         && !string_is_empty(settings->path.bundle_assets_dst)
 #ifdef IOS
          && menu_data->push_help_screen
 #else
@@ -176,9 +176,9 @@ static bool menu_init(menu_handle_t *menu_data)
       menu_data->help_screen_type           = MENU_HELP_EXTRACT;
       menu_data->push_help_screen           = true;
 #ifdef HAVE_ZLIB
-      rarch_task_push_decompress(settings->bundle_assets_src_path, 
-            settings->bundle_assets_dst_path,
-            NULL, settings->bundle_assets_dst_path_subdir,
+      rarch_task_push_decompress(settings->path.bundle_assets_src, 
+            settings->path.bundle_assets_dst,
+            NULL, settings->path.bundle_assets_dst_subdir,
             NULL, bundle_decompressed, NULL);
 #endif
    }
@@ -924,6 +924,24 @@ bool menu_driver_ctl(enum rarch_menu_ctl_state state, void *data)
                   bind->elem1,
                   bind->label_hash,
                   bind->menu_label_hash);
+         }
+         break;
+      case RARCH_MENU_CTL_UPDATE_THUMBNAIL_PATH:
+         {
+            size_t selection;
+            if (!menu_navigation_ctl(MENU_NAVIGATION_CTL_GET_SELECTION, &selection))
+               return false;
+
+            if (!menu_driver_ctx || !menu_driver_ctx->update_thumbnail_path)
+               return false;
+            menu_driver_ctx->update_thumbnail_path(menu_userdata, selection);
+         }
+         break;
+      case RARCH_MENU_CTL_UPDATE_THUMBNAIL_IMAGE:
+         {
+            if (!menu_driver_ctx || !menu_driver_ctx->update_thumbnail_image)
+               return false;
+            menu_driver_ctx->update_thumbnail_image(menu_userdata);
          }
          break;
       default:

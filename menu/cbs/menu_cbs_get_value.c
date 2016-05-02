@@ -161,9 +161,40 @@ static void menu_action_setting_disp_set_label_filter(
    strlcpy(s2, path, len2);
    strlcpy(s, menu_hash_to_str(MENU_VALUE_NOT_AVAILABLE), len);
 
-   if (settings && *settings->video.softfilter_plugin)
+   if (settings && *settings->path.softfilter_plugin)
       fill_short_pathname_representation(s,
-            settings->video.softfilter_plugin, len);
+            settings->path.softfilter_plugin, len);
+}
+
+static void menu_action_setting_disp_set_label_pipeline(
+      file_list_t* list,
+      unsigned *w, unsigned type, unsigned i,
+      const char *label,
+      char *s, size_t len,
+      const char *entry_label,
+      const char *path,
+      char *s2, size_t len2)
+{
+   settings_t *settings = config_get_ptr();
+
+   *s = '\0';
+   *w = 19;
+
+   switch (settings->menu.shader_pipeline)
+   {
+      case 0:
+         snprintf(s, len, "%s", "OFF");
+         break;
+      case 1:
+         snprintf(s, len, "%s", "Ribbon (simplified)");
+         break;
+      case 2:
+         snprintf(s, len, "%s", "Ribbon");
+         break;
+   }
+
+   strlcpy(s2, path, len2);
+
 }
 
 static void menu_action_setting_disp_set_label_shader_num_passes(
@@ -615,6 +646,54 @@ static void menu_action_setting_disp_set_label_xmb_theme(
          break;
       case 3:
          snprintf(s, len, "%s", "Custom");
+         break;
+   }
+}
+
+static void menu_action_setting_disp_set_label_xmb_gradient(
+      file_list_t* list,
+      unsigned *w, unsigned type, unsigned i,
+      const char *label,
+      char *s, size_t len,
+      const char *entry_label,
+      const char *path,
+      char *s2, size_t len2)
+{
+   settings_t *settings        = config_get_ptr();
+
+   if (!settings)
+      return;
+
+   strlcpy(s2, path, len2);
+   *w = 19;
+   switch (settings->menu.background_gradient)
+   {
+      case 0:
+         snprintf(s, len, "%s", "Legacy Red");
+         break;
+      case 1:
+         snprintf(s, len, "%s", "Dark Purple");
+         break;
+      case 2:
+         snprintf(s, len, "%s", "Midnight Blue");
+         break;
+      case 3:
+         snprintf(s, len, "%s", "Golden");
+         break;
+      case 4:
+         snprintf(s, len, "%s", "Electric Blue");
+         break;
+      case 5:
+         snprintf(s, len, "%s", "Apple Green");
+         break;
+      case 6:
+         snprintf(s, len, "%s", "Undersea");
+         break;
+      case 7:
+         snprintf(s, len, "%s", "Volcanic Red");
+         break;
+      case 8:
+         snprintf(s, len, "%s", "Dark");
          break;
    }
 }
@@ -1209,6 +1288,10 @@ static int menu_cbs_init_bind_get_string_representation_compare_label(
          BIND_ACTION_GET_VALUE(cbs,
             menu_action_setting_disp_set_label_xmb_theme);
          break;
+      case MENU_LABEL_XMB_GRADIENT:
+         BIND_ACTION_GET_VALUE(cbs,
+            menu_action_setting_disp_set_label_xmb_gradient);
+         break;
       case MENU_LABEL_THUMBNAILS:
          BIND_ACTION_GET_VALUE(cbs,
             menu_action_setting_disp_set_label_thumbnails);
@@ -1236,6 +1319,10 @@ static int menu_cbs_init_bind_get_string_representation_compare_label(
       case MENU_LABEL_VIDEO_SHADER_NUM_PASSES:
          BIND_ACTION_GET_VALUE(cbs,
             menu_action_setting_disp_set_label_shader_num_passes);
+         break;
+      case MENU_LABEL_XMB_RIBBON_ENABLE:
+         BIND_ACTION_GET_VALUE(cbs,
+            menu_action_setting_disp_set_label_pipeline);
          break;
       case MENU_LABEL_VIDEO_SHADER_PASS:
          BIND_ACTION_GET_VALUE(cbs,

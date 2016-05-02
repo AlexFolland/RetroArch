@@ -65,7 +65,10 @@ enum rarch_audio_ctl_state
    RARCH_AUDIO_CTL_IS_ACTIVE,
    RARCH_AUDIO_CTL_RESAMPLER_DEINIT,
    RARCH_AUDIO_CTL_RESAMPLER_INIT,
-   RARCH_AUDIO_CTL_RESAMPLER_PROCESS
+   RARCH_AUDIO_CTL_RESAMPLER_PROCESS,
+   RARCH_AUDIO_CTL_DEVICES_LIST_NEW,
+   RARCH_AUDIO_CTL_DEVICES_LIST_FREE,
+   RARCH_AUDIO_CTL_DEVICES_LIST_GET
 };
 
 typedef struct audio_driver
@@ -106,6 +109,12 @@ typedef struct audio_driver
 
    /* Human-readable identifier. */
    const char *ident;
+
+   /* Optional. Get audio device list (allocates, caller has to free this) */
+   void *(*device_list_new)(void *data);
+
+   /* Optional. Frees audio device list */
+   void (*device_list_free)(void *data, void *data2);
 
    /* Optional. */
    size_t (*write_avail)(void *data);

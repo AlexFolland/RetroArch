@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include <net/net_compat.h>
+#include <net/net_socket.h>
 #include <compat/strl.h>
 
 #if defined(VITA)
@@ -160,91 +161,6 @@ void freeaddrinfo_retro(struct addrinfo *res)
 #endif
 }
 
-bool socket_nonblock(int fd)
-{
-#if defined(__CELLOS_LV2__) || defined(VITA)
-   int i = 1;
-   setsockopt(fd, SOL_SOCKET, SO_NBIO, &i, sizeof(int));
-   return true;
-#elif defined(_WIN32)
-   u_long mode = 1;
-   return ioctlsocket(fd, FIONBIO, &mode) == 0;
-#else
-   return fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) == 0;
-#endif
-}
-
-int socket_close(int fd)
-{ 
-#if defined(_WIN32) && !defined(_XBOX360)
-   /* WinSock has headers from the stone age. */
-   return closesocket(fd);
-#elif defined(__CELLOS_LV2__)
-   return socketclose(fd);
-#elif defined(VITA)
-   return sceNetSocketClose(fd);
-#else
-   return close(fd);
-#endif
-}
-
-int socket_select(int nfds, fd_set *readfs, fd_set *writefds,
-      fd_set *errorfds, struct timeval *timeout)
-{
-#if defined(__CELLOS_LV2__)
-   return socketselect(nfds, readfs, writefds, errorfds, timeout);
-#elif defined(VITA)
-   SceNetEpollEvent ev = {0};
-
-   ev.events = PSP2_NET_EPOLLIN | PSP2_NET_EPOLLHUP;
-   ev.data.fd = nfds;
-
-   if((sceNetEpollControl(retro_epoll_fd, PSP2_NET_EPOLL_CTL_ADD, nfds, &ev)))
-   {
-      int ret = sceNetEpollWait(retro_epoll_fd, &ev, 1, 0);
-      sceNetEpollControl(retro_epoll_fd, PSP2_NET_EPOLL_CTL_DEL, nfds, NULL);
-      return ret;
-   }
-   return 0;
-#else
-   return select(nfds, readfs, writefds, errorfds, timeout);
-#endif
-}
-
-int socket_send_all_blocking(int fd, const void *data_, size_t size)
-{
-   const uint8_t *data = (const uint8_t*)data_;
-
-   while (size)
-   {
-      ssize_t ret = send(fd, (const char*)data, size, 0);
-      if (ret <= 0)
-         return false;
-
-      data += ret;
-      size -= ret;
-   }
-
-   return true;
-}
-
-int socket_receive_all_blocking(int fd, void *data_, size_t size)
-{
-   const uint8_t *data = (const uint8_t*)data_;
-
-   while (size)
-   {
-      ssize_t ret = recv(fd, (char*)data, size, 0);
-      if (ret <= 0)
-         return false;
-
-      data += ret;
-      size -= ret;
-   }
-
-   return true;
-}
-
 /**
  * network_init:
  *
@@ -272,28 +188,21 @@ bool network_init(void)
    sys_net_initialize_network();
 #elif defined(VITA)
    SceNetInitParam initparam;
-   /* Init Net */
+
    if (sceNetShowNetstat() == PSP2_NET_ERROR_ENOTINIT)
    {
       _net_compat_net_memory = malloc(COMPAT_NET_INIT_SIZE);
 
-      initparam.memory = _net_compat_net_memory;
-      initparam.size = COMPAT_NET_INIT_SIZE;
-      initparam.flags = 0;
+      initparam.memory       = _net_compat_net_memory;
+      initparam.size         = COMPAT_NET_INIT_SIZE;
+      initparam.flags        = 0;
 
       sceNetInit(&initparam);
-      //printf("sceNetInit(): 0x%08X\n", ret);
 
-      /* Init NetCtl */
       sceNetCtlInit();
-   }
-   else
-   {
-      //printf("Net is already initialized.\n");
    }
    
    retro_epoll_fd = sceNetEpollCreate("epoll", 0);
-   //printf("Epoll %x\n",retro_epoll_fd);
 #else
    signal(SIGPIPE, SIG_IGN); /* Do not like SIGPIPE killing our app. */
 #endif
@@ -312,6 +221,7 @@ void network_deinit(void)
 #if defined(_WIN32)
    WSACleanup();
 #elif defined(__CELLOS_LV2__) && !defined(__PSL1GHT__)
+   cellNetCtlTerm();
    sys_net_finalize_network();
    cellSysmoduleUnloadModule(CELL_SYSMODULE_NET);
 #elif defined(VITA)
@@ -323,5 +233,7 @@ void network_deinit(void)
       free(_net_compat_net_memory);
       _net_compat_net_memory = NULL;
    }
+#elif defined(GEKKO) && !defined(HW_DOL)
+   net_deinit();
 #endif
 }

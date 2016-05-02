@@ -62,6 +62,7 @@
 #include "system.h"
 #include "retroarch.h"
 #include "command_event.h"
+#include "file_path_special.h"
 #include "libretro_version_1.h"
 #include "verbosity.h"
 
@@ -679,13 +680,22 @@ struct string_list *compressed_file_list_new(const char *path,
 
 static void check_defaults_dir_create_dir(const char *path)
 {
-   if (path_is_directory(path))
+   char new_path[PATH_MAX_LENGTH];
+   fill_pathname_expand_special(new_path,
+         path, sizeof(new_path));
+
+   if (path_is_directory(new_path))
       return;
-   path_mkdir(path);
+   path_mkdir(new_path);
 }
 
-static void check_defaults_dirs(void)
+static void check_default_dirs(void)
 {
+   /* early return for people with a custom folder setup
+      so it doesn't create unnecessary directories
+    */
+   if (path_file_exists("custom.ini"))
+      return;
    if (*g_defaults.dir.core_assets)
       check_defaults_dir_create_dir(g_defaults.dir.core_assets);
    if (*g_defaults.dir.remap)
@@ -734,6 +744,8 @@ static void check_defaults_dirs(void)
       check_defaults_dir_create_dir(g_defaults.dir.cursor);
    if (*g_defaults.dir.cheats)
       check_defaults_dir_create_dir(g_defaults.dir.cheats);
+   if (*g_defaults.dir.thumbnails)
+      check_defaults_dir_create_dir(g_defaults.dir.thumbnails);
 }
 
 void content_push_to_history_playlist(bool do_push,
@@ -753,7 +765,7 @@ void content_push_to_history_playlist(bool do_push,
    content_playlist_push(g_defaults.history,
          path,
          NULL,
-         settings->libretro,
+         settings->path.libretro,
          info->library_name,
          NULL,
          NULL);
@@ -886,7 +898,7 @@ static bool content_load(content_ctx_info_t *info)
    event_cmd_ctl(EVENT_CMD_RESUME, NULL);
    event_cmd_ctl(EVENT_CMD_VIDEO_SET_ASPECT_RATIO, NULL);
 
-   check_defaults_dirs();
+   check_default_dirs();
 
    frontend_driver_process_args(rarch_argc_ptr, rarch_argv_ptr);
    frontend_driver_content_loaded();
@@ -967,19 +979,15 @@ static bool dump_to_file_desperate(const void *data,
 {
    time_t time_;
    char timebuf[256];
+   char application_data[PATH_MAX_LENGTH];
    char path[PATH_MAX_LENGTH];
-#if defined(_WIN32) && !defined(_XBOX)
-   const char *base = getenv("APPDATA");
-#elif defined(__CELLOS_LV2__) || defined(_XBOX)
-   const char *base = NULL;
-#else
-   const char *base = getenv("HOME");
-#endif
 
-   if (!base)
+   if (!fill_pathname_application_data(application_data,
+            sizeof(application_data)))
       return false;
 
-   snprintf(path, sizeof(path), "%s/RetroArch-recovery-%u", base, type);
+   snprintf(path, sizeof(path), "%s/RetroArch-recovery-%u",
+      application_data, type);
 
    time(&time_);
 
@@ -1316,7 +1324,7 @@ static bool load_content_from_compressed_archive(
    RARCH_LOG("Compressed file in case of need_fullpath."
          " Now extracting to temporary directory.\n");
 
-   strlcpy(new_basedir, settings->cache_directory,
+   strlcpy(new_basedir, settings->directory.cache,
          sizeof(new_basedir));
 
    if (string_is_empty(new_basedir) || !path_is_directory(new_basedir))
@@ -1532,8 +1540,8 @@ static bool init_content_file_extract(
 
          if (!file_archive_extract_first_content_file(temp_content,
                   sizeof(temp_content), valid_ext,
-                  *settings->cache_directory ?
-                  settings->cache_directory : NULL,
+                  *settings->directory.cache ?
+                  settings->directory.cache : NULL,
                   new_path, sizeof(new_path)))
          {
             RARCH_ERR("Failed to extract content from zipped file: %s.\n",

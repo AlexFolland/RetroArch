@@ -26,8 +26,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include <sys/types.h>
-
+#include <retro_common_api.h>
 #include <boolean.h>
 
 enum intfstream_type

@@ -486,6 +486,14 @@ bool menu_display_ctl(enum menu_display_ctl_state state, void *data)
             menu_disp->draw(draw);
          }
          break;
+      case MENU_DISPLAY_CTL_DRAW_PIPELINE:
+         {
+            menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
+            if (!menu_disp || !draw || !menu_disp->draw_pipeline)
+               return false;
+            menu_disp->draw_pipeline(draw);
+         }
+         break;
       case MENU_DISPLAY_CTL_DRAW_BG:
          {
             struct gfx_coords coords;
@@ -509,35 +517,24 @@ bool menu_display_ctl(enum menu_display_ctl_state state, void *data)
             coords.lut_tex_coord = new_tex_coord;
             coords.color         = (const float*)draw->color;
 
-            if (!draw->dont_replace_coords)
-               draw->coords      = &coords;
+            draw->coords      = &coords;
 
             if (!draw->texture)
                draw->texture     = menu_display_white_texture;
 
             draw->matrix_data = (math_matrix_4x4*)menu_disp->get_default_mvp();
-
-            menu_display_ctl(MENU_DISPLAY_CTL_DRAW, draw);
          }
          break;
       case MENU_DISPLAY_CTL_DRAW_GRADIENT:
          {
             menu_display_ctx_draw_t *draw = (menu_display_ctx_draw_t*)data;
-            float bg[16] = {
-               1, 0, 0.1,     1,
-               1, 0.1, 0,     1,
-               0.05, 0, 0.05, 1,
-               0.05, 0, 0.05, 1 
-            };
 
-            bg[3] = bg[7] = bg[11] = bg[15] = draw->handle_alpha;
-
-            draw->color   = bg;
             draw->texture = 0;
             draw->x       = 0;
             draw->y       = 0;
 
             menu_display_ctl(MENU_DISPLAY_CTL_DRAW_BG, draw);
+            menu_display_ctl(MENU_DISPLAY_CTL_DRAW,    draw);
          }
          break;
       case MENU_DISPLAY_CTL_ROTATE_Z:
@@ -620,6 +617,14 @@ void menu_display_draw_cursor(
 {
    menu_display_ctx_draw_t draw;
    struct gfx_coords coords;
+   settings_t *settings = config_get_ptr();
+   bool cursor_visible  = settings->video.fullscreen ||
+       !video_driver_ctl(RARCH_DISPLAY_CTL_HAS_WINDOWED, NULL);
+
+   if ( !settings->menu.mouse.enable)
+      return;
+   if (!cursor_visible)
+      return;
 
    coords.vertices      = 4;
    coords.vertex        = NULL;
@@ -784,15 +789,19 @@ void menu_display_snow(int width, int height)
 void menu_display_draw_text(const char *msg, 
       int width, int height, struct font_params *params)
 {
-   int font_size;
    void *fb_buf              = NULL;
 
-   menu_display_ctl(MENU_DISPLAY_CTL_FONT_SIZE, &font_size);
-
-   params->x           = params->x / width;
-   params->y           = 1.0f - (params->y + font_size / 3) / height;
+   params->x           = params->x;
+   params->y           = params->y;
 
    menu_display_ctl(MENU_DISPLAY_CTL_FONT_BUF, &fb_buf);
 
    video_driver_set_osd_msg(msg, params, fb_buf);
+}
+
+void menu_display_set_alpha(float *color, float alpha_value)
+{
+   if (!color)
+      return;
+   color[3] = color[7] = color[11] = color[15] = alpha_value;
 }

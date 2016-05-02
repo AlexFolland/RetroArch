@@ -72,17 +72,12 @@ typedef struct settings
       unsigned aspect_ratio_idx;
       unsigned rotation;
 
-      char shader_path[PATH_MAX_LENGTH];
       bool shader_enable;
 
-      char softfilter_plugin[PATH_MAX_LENGTH];
       float refresh_rate;
       bool threaded;
 
-      char filter_dir[PATH_MAX_LENGTH];
-      char shader_dir[PATH_MAX_LENGTH];
 
-      char font_path[PATH_MAX_LENGTH];
       float font_size;
       bool font_enable;
       float msg_pos_x;
@@ -125,7 +120,6 @@ typedef struct settings
       bool dynamic_wallpaper_enable;
       unsigned thumbnails;
       bool throttle;
-      char wallpaper[PATH_MAX_LENGTH];
 
       struct
       {
@@ -167,7 +161,9 @@ typedef struct settings
       unsigned xmb_scale_factor;
       unsigned xmb_alpha_factor;
       unsigned xmb_theme;
-      bool xmb_shadows;
+      unsigned background_gradient;
+      bool xmb_shadows_enable;
+      unsigned shader_pipeline;
       char xmb_font[PATH_MAX_LENGTH];
       bool throttle_framerate;
       bool linear_filter;
@@ -198,22 +194,20 @@ typedef struct settings
    struct
    {
       char driver[32];
+      char resampler[32];
+      char device[PATH_MAX_LENGTH];
       bool enable;
       bool mute_enable;
       unsigned out_rate;
       unsigned block_frames;
-      char device[PATH_MAX_LENGTH];
       unsigned latency;
       bool sync;
 
-      char dsp_plugin[PATH_MAX_LENGTH];
-      char filter_dir[PATH_MAX_LENGTH];
 
       bool rate_control;
       float rate_control_delta;
       float max_timing_skew;
       float volume; /* dB scale. */
-      char resampler[32];
    } audio;
 
    struct
@@ -221,6 +215,7 @@ typedef struct settings
       char driver[32];
       char joypad_driver[32];
       char keyboard_layout[64];
+      char device_names[MAX_USERS][64];
 
       unsigned remap_ids[MAX_USERS][RARCH_BIND_LIST_END];
       struct retro_keybind binds[MAX_USERS][RARCH_BIND_LIST_END];
@@ -241,7 +236,6 @@ typedef struct settings
       float axis_threshold;
       unsigned joypad_map[MAX_USERS];
       unsigned device[MAX_USERS];
-      char device_names[MAX_USERS][64];
       unsigned device_name_index[MAX_USERS];
       bool autodetect_enable;
       bool netplay_client_swap_input;
@@ -252,11 +246,9 @@ typedef struct settings
       bool overlay_enable;
       bool overlay_enable_autopreferred;
       bool overlay_hide_in_menu;
-      char overlay[PATH_MAX_LENGTH];
       float overlay_opacity;
       float overlay_scale;
 
-      char autoconfig_dir[PATH_MAX_LENGTH];
       bool input_descriptor_label_show;
       bool input_descriptor_hide_unbound;
 
@@ -274,7 +266,6 @@ typedef struct settings
    struct
    {
       bool enable;
-      char overlay[PATH_MAX_LENGTH];
       float opacity;
       float scale;
    } osk;
@@ -315,34 +306,57 @@ typedef struct settings
    bool bundle_assets_extract_enable;
    unsigned bundle_assets_extract_version_current;
    unsigned bundle_assets_extract_last_version;
-   char bundle_assets_src_path[PATH_MAX_LENGTH];
-   char bundle_assets_dst_path[PATH_MAX_LENGTH];
-   char bundle_assets_dst_path_subdir[PATH_MAX_LENGTH];
 
-   char core_options_path[PATH_MAX_LENGTH];
-   char content_history_path[PATH_MAX_LENGTH];
-   char content_history_directory[PATH_MAX_LENGTH];
+   struct
+   {
+      char cheat_database[PATH_MAX_LENGTH];
+      char content_database[PATH_MAX_LENGTH];
+      char libretro[PATH_MAX_LENGTH];
+      char osk_overlay[PATH_MAX_LENGTH];
+      char overlay[PATH_MAX_LENGTH];
+      char menu_wallpaper[PATH_MAX_LENGTH];
+      char audio_dsp_plugin[PATH_MAX_LENGTH];
+      char softfilter_plugin[PATH_MAX_LENGTH];
+      char core_options[PATH_MAX_LENGTH];
+      char content_history[PATH_MAX_LENGTH];
+      char libretro_info[PATH_MAX_LENGTH];
+      char cheat_settings[PATH_MAX_LENGTH];
+      char bundle_assets_src[PATH_MAX_LENGTH];
+      char bundle_assets_dst[PATH_MAX_LENGTH];
+      char bundle_assets_dst_subdir[PATH_MAX_LENGTH];
+      char shader[PATH_MAX_LENGTH];
+      char font[PATH_MAX_LENGTH];
+   } path;
+
+   struct
+   {
+      char audio_filter[PATH_MAX_LENGTH];
+      char autoconfig[PATH_MAX_LENGTH];
+      char video_filter[PATH_MAX_LENGTH];
+      char video_shader[PATH_MAX_LENGTH];
+      char content_history[PATH_MAX_LENGTH];
+      char libretro[PATH_MAX_LENGTH];
+      char cursor[PATH_MAX_LENGTH];
+      char input_remapping[PATH_MAX_LENGTH];
+      char overlay[PATH_MAX_LENGTH];
+      char resampler[PATH_MAX_LENGTH];
+      char screenshot[PATH_MAX_LENGTH];
+      char system[PATH_MAX_LENGTH];
+      char cache[PATH_MAX_LENGTH];
+      char playlist[PATH_MAX_LENGTH];
+      char core_assets[PATH_MAX_LENGTH];
+      char assets[PATH_MAX_LENGTH];
+      char dynamic_wallpapers[PATH_MAX_LENGTH];
+      char thumbnails[PATH_MAX_LENGTH];
+      char menu_config[PATH_MAX_LENGTH];
+      char menu_content[PATH_MAX_LENGTH];
+   } directory;
+
    unsigned content_history_size;
 
-   char libretro[PATH_MAX_LENGTH];
-   char libretro_directory[PATH_MAX_LENGTH];
    unsigned libretro_log_level;
-   char libretro_info_path[PATH_MAX_LENGTH];
-   char content_database[PATH_MAX_LENGTH];
-   char cheat_database[PATH_MAX_LENGTH];
-   char cursor_directory[PATH_MAX_LENGTH];
-   char cheat_settings_path[PATH_MAX_LENGTH];
-   char input_remapping_directory[PATH_MAX_LENGTH];
-
-   char overlay_directory[PATH_MAX_LENGTH];
-   char resampler_directory[PATH_MAX_LENGTH];
-   char screenshot_directory[PATH_MAX_LENGTH];
-   char system_directory[PATH_MAX_LENGTH];
 
    bool auto_screenshot_filename;
-
-   char cache_directory[PATH_MAX_LENGTH];
-   char playlist_directory[PATH_MAX_LENGTH];
 
    bool history_list_enable;
    bool rewind_enable;
@@ -368,13 +382,7 @@ typedef struct settings
    unsigned network_remote_base_port;
    bool debug_panel_enable;
 
-   char core_assets_directory[PATH_MAX_LENGTH];
-   char assets_directory[PATH_MAX_LENGTH];
-   char dynamic_wallpapers_directory[PATH_MAX_LENGTH];
-   char thumbnails_directory[PATH_MAX_LENGTH];
-   char menu_config_directory[PATH_MAX_LENGTH];
 #if defined(HAVE_MENU)
-   char menu_content_directory[PATH_MAX_LENGTH];
    bool menu_show_start_screen;
 #endif
    bool fps_show;
@@ -401,7 +409,7 @@ typedef struct settings
 
    bool config_save_on_exit;
 
-#ifdef HAVE_LAKKA
+#ifdef HAVE_SYSTEMD
    bool ssh_enable;
    bool samba_enable;
    bool bluetooth_enable;

@@ -27,6 +27,7 @@
 #include <file/file_path.h>
 #include <retro_miscellaneous.h>
 #include <net/net_compat.h>
+#include <net/net_socket.h>
 
 #include "remote.h"
 
@@ -66,10 +67,8 @@ static input_remote_state_t *input_remote_get_state_ptr(void)
 static bool remote_init_network(rarch_remote_t *handle,
       uint16_t port, unsigned user)
 {
-   struct addrinfo hints = {0};
-   char port_buf[16]     = {0};
+   int fd;
    struct addrinfo *res  = NULL;
-   int yes               = 1;
 
    port = port + user;
 
@@ -79,30 +78,17 @@ static bool remote_init_network(rarch_remote_t *handle,
    RARCH_LOG("Bringing up remote interface on port %hu.\n",
          (unsigned short)port);
 
-#if defined(_WIN32) || defined(HAVE_SOCKET_LEGACY)
-   hints.ai_family   = AF_INET;
-#else
-   hints.ai_family   = AF_UNSPEC;
-#endif
-   hints.ai_socktype = SOCK_DGRAM;
-   hints.ai_flags    = AI_PASSIVE;
+   fd = socket_init((void*)&res, port, NULL, SOCKET_TYPE_DATAGRAM);
 
-
-   snprintf(port_buf, sizeof(port_buf), "%hu", (unsigned short)port);
-   if (getaddrinfo_retro(NULL, port_buf, &hints, &res) < 0)
+   if (fd < 0)
       goto error;
 
-   handle->net_fd[user] = socket(res->ai_family,
-         res->ai_socktype, res->ai_protocol);
-   if (handle->net_fd[user] < 0)
-      goto error;
+   handle->net_fd[user] = fd;
 
    if (!socket_nonblock(handle->net_fd[user]))
       goto error;
 
-   setsockopt(handle->net_fd[user], SOL_SOCKET,
-         SO_REUSEADDR, (const char*)&yes, sizeof(int));
-   if (bind(handle->net_fd[user], res->ai_addr, res->ai_addrlen) < 0)
+   if (!socket_bind(handle->net_fd[user], res))
    {
       RARCH_ERR("Failed to bind socket.\n");
       goto error;

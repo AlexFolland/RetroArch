@@ -309,7 +309,7 @@ static void load_dynamic_core(void)
       retro_fail(1, "init_libretro_sym()");
    }
 
-   if (!*settings->libretro)
+   if (!*settings->path.libretro)
    {
       RARCH_ERR("RetroArch is built for dynamic libretro cores, but "
             "libretro_path is not set. Cannot continue.\n");
@@ -319,15 +319,15 @@ static void load_dynamic_core(void)
    /* Need to use absolute path for this setting. It can be
     * saved to content history, and a relative path would
     * break in that scenario. */
-   path_resolve_realpath(settings->libretro, sizeof(settings->libretro));
+   path_resolve_realpath(settings->path.libretro, sizeof(settings->path.libretro));
 
    RARCH_LOG("Loading dynamic libretro core from: \"%s\"\n",
-         settings->libretro);
-   lib_handle = dylib_load(settings->libretro);
+         settings->path.libretro);
+   lib_handle = dylib_load(settings->path.libretro);
    if (!lib_handle)
    {
       RARCH_ERR("Failed to open libretro core: \"%s\"\n",
-            settings->libretro);
+            settings->path.libretro);
       RARCH_ERR("Error(s): %s\n", dylib_error());
       retro_fail(1, "load_dynamic()");
    }
@@ -715,7 +715,7 @@ bool rarch_environment_cb(unsigned cmd, void *data)
          break;
 
       case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:
-         if (string_is_empty(settings->system_directory))
+         if (string_is_empty(settings->directory.system))
          {
             char *fullpath = NULL;
             runloop_ctl(RUNLOOP_CTL_GET_CONTENT_PATH, &fullpath);
@@ -731,9 +731,9 @@ bool rarch_environment_cb(unsigned cmd, void *data)
          }
          else
          {
-            *(const char**)data = settings->system_directory;
+            *(const char**)data = settings->directory.system;
             RARCH_LOG("Environ SYSTEM_DIRECTORY: \"%s\".\n",
-               settings->system_directory);
+               settings->directory.system);
          }
 
          break;
@@ -1008,7 +1008,7 @@ bool rarch_environment_cb(unsigned cmd, void *data)
          const char **path = (const char**)data;
          *path = NULL;
 #ifdef HAVE_DYNAMIC
-         *path = settings->libretro;
+         *path = settings->path.libretro;
 #endif
          break;
       }
@@ -1127,10 +1127,10 @@ bool rarch_environment_cb(unsigned cmd, void *data)
       {
          const char **dir = (const char**)data;
 
-         *dir = *settings->core_assets_directory ?
-            settings->core_assets_directory : NULL;
+         *dir = *settings->directory.core_assets ?
+            settings->directory.core_assets : NULL;
          RARCH_LOG("Environ CORE_ASSETS_DIRECTORY: \"%s\".\n",
-               settings->core_assets_directory);
+               settings->directory.core_assets);
          break;
       }
 

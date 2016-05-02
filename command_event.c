@@ -670,8 +670,8 @@ static bool event_save_core_config(void)
    global_t   *global                = global_get_ptr();
 
    *config_dir = '\0';
-   if (!string_is_empty(settings->menu_config_directory))
-      strlcpy(config_dir, settings->menu_config_directory,
+   if (!string_is_empty(settings->directory.menu_config))
+      strlcpy(config_dir, settings->directory.menu_config,
             sizeof(config_dir));
    else if (!string_is_empty(global->path.config)) /* Fallback */
       fill_pathname_basedir(config_dir, global->path.config,
@@ -682,9 +682,10 @@ static bool event_save_core_config(void)
       RARCH_ERR("%s\n", msg_hash_to_str(MSG_CONFIG_DIRECTORY_NOT_SET));
       return false;
    }
+
    /* Infer file name based on libretro core. */
-   if (!string_is_empty(settings->libretro) 
-   && path_file_exists(settings->libretro))
+   if (!string_is_empty(settings->path.libretro) 
+   && path_file_exists(settings->path.libretro))
    {
       unsigned i;
       RARCH_LOG("Using core name for new config\n");
@@ -693,8 +694,11 @@ static bool event_save_core_config(void)
       {
          char tmp[64];
 
-         fill_pathname_base(config_name, settings->libretro,
+         fill_pathname_base(
+               config_name,
+               settings->path.libretro,
                sizeof(config_name));
+
          path_remove_extension(config_name);
          fill_pathname_join(config_path, config_dir, config_name,
                sizeof(config_path));
@@ -984,7 +988,7 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
 #else
             char *fullpath = NULL;
             runloop_ctl(RUNLOOP_CTL_GET_CONTENT_PATH, &fullpath);
-            runloop_ctl(RUNLOOP_CTL_SET_LIBRETRO_PATH, settings->libretro);
+            runloop_ctl(RUNLOOP_CTL_SET_LIBRETRO_PATH, settings->path.libretro);
             event_cmd_ctl(EVENT_CMD_EXEC, (void*)fullpath);
             event_cmd_ctl(EVENT_CMD_QUIT, NULL);
 #endif
@@ -1009,15 +1013,17 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
                core_info_ctx_find_t info_find;
 
 #if defined(HAVE_DYNAMIC)
-               if (!(*settings->libretro))
+               if (!(*settings->path.libretro))
                   return false;
 
-               libretro_get_system_info(settings->libretro, system,
+               libretro_get_system_info(
+                     settings->path.libretro,
+                     system,
                      ptr);
 #else
                libretro_get_system_info_static(system, ptr);
 #endif
-               info_find.path = settings->libretro;
+               info_find.path = settings->path.libretro;
 
                if (!core_info_ctl(CORE_INFO_CTL_LOAD, &info_find))
                   return false;
@@ -1266,9 +1272,9 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
          break;
       case EVENT_CMD_DSP_FILTER_INIT:
          event_cmd_ctl(EVENT_CMD_DSP_FILTER_DEINIT, NULL);
-         if (!*settings->audio.dsp_plugin)
+         if (!*settings->path.audio_dsp_plugin)
             break;
-         audio_driver_dsp_filter_init(settings->audio.dsp_plugin);
+         audio_driver_dsp_filter_init(settings->path.audio_dsp_plugin);
          break;
       case EVENT_CMD_GPU_RECORD_DEINIT:
          video_driver_ctl(RARCH_DISPLAY_CTL_GPU_RECORD_DEINIT, NULL);
@@ -1296,9 +1302,9 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
             return false;
          RARCH_LOG("%s: [%s].\n",
                msg_hash_to_str(MSG_LOADING_HISTORY_FILE),
-               settings->content_history_path);
+               settings->path.content_history);
          g_defaults.history = content_playlist_init(
-               settings->content_history_path,
+               settings->path.content_history,
                settings->content_history_size);
          break;
       case EVENT_CMD_CORE_INFO_DEINIT:
@@ -1307,7 +1313,7 @@ bool event_cmd_ctl(enum event_command cmd, void *data)
       case EVENT_CMD_CORE_INFO_INIT:
          event_cmd_ctl(EVENT_CMD_CORE_INFO_DEINIT, NULL);
 
-         if (*settings->libretro_directory)
+         if (*settings->directory.libretro)
             core_info_ctl(CORE_INFO_CTL_LIST_INIT, NULL);
          break;
       case EVENT_CMD_CORE_DEINIT:

@@ -125,6 +125,7 @@ enum
    MENU_XUI,
    MENU_MATERIALUI,
    MENU_XMB,
+   MENU_NUKLEAR,
 
    RECORD_FFMPEG,
    RECORD_NULL
@@ -510,8 +511,21 @@ static bool default_block_config_read = true;
 
 static unsigned xmb_scale_factor = 100;
 static unsigned xmb_alpha_factor = 75;
-static unsigned xmb_theme = 0;
-static bool xmb_shadows = false;
+static unsigned xmb_theme        = 0;
+
+#ifdef HAVE_LAKKA
+static bool xmb_shadows_enable   = false;
+#else
+static bool xmb_shadows_enable   = true;
+#endif
+
+static unsigned menu_background_gradient = 4;
+
+#if defined(HAVE_OPENGLES2)
+static unsigned menu_shader_pipeline = 1;
+#else
+static unsigned menu_shader_pipeline = 2;
+#endif
 
 static bool show_advanced_settings    = true;
 static const uint32_t menu_entry_normal_color = 0xffffffff;
@@ -765,6 +779,8 @@ static const bool input_descriptor_hide_unbound = false;
 static const unsigned input_max_users = 5;
 
 static const unsigned input_poll_type_behavior = 2;
+
+static const unsigned menu_thumbnails_default = 3;
 
 #ifdef IOS
 static const bool ui_companion_start_on_boot = false;

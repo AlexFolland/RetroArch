@@ -24,6 +24,7 @@
 #include <retro_assert.h>
 #include <string/stdstring.h>
 
+#include "file_path_special.h"
 #include "audio/audio_driver.h"
 #include "configuration.h"
 #include "config.def.h"
@@ -373,6 +374,8 @@ const char *config_get_default_menu(void)
          return "glui";
       case MENU_XMB:
          return "xmb";
+      case MENU_NUKLEAR:
+         return "nuklear";
       default:
          break;
    }
@@ -483,7 +486,9 @@ static void config_set_defaults(void)
    settings->menu.xmb_scale_factor   = xmb_scale_factor;
    settings->menu.xmb_alpha_factor   = xmb_alpha_factor;
    settings->menu.xmb_theme          = xmb_theme;
-   settings->menu.xmb_shadows        = xmb_shadows;
+   settings->menu.background_gradient= menu_background_gradient;
+   settings->menu.xmb_shadows_enable = xmb_shadows_enable;
+   settings->menu.shader_pipeline    = menu_shader_pipeline;
    settings->menu.xmb_font[0]        = '\0';
    settings->menu.throttle_framerate = true;
    settings->menu.linear_filter      = true;
@@ -617,8 +622,7 @@ static void config_set_defaults(void)
    settings->menu.timedate_enable              = true;
    settings->menu.core_enable                  = true;
    settings->menu.dynamic_wallpaper_enable     = false;
-   settings->menu.thumbnails                   = 0;
-   *settings->menu.wallpaper                   = '\0';
+   settings->menu.thumbnails                   = menu_thumbnails_default;
    settings->menu.show_advanced_settings       = show_advanced_settings;
    settings->menu.entry_normal_color           = menu_entry_normal_color;
    settings->menu.entry_hover_color            = menu_entry_hover_color;
@@ -725,9 +729,28 @@ static void config_set_defaults(void)
    if (!global->has_set.state_path)
       *global->dir.savestate = '\0';
 
-   *settings->libretro_info_path = '\0';
+   *settings->path.libretro_info = '\0';
    if (!global->has_set.libretro_directory)
-      *settings->libretro_directory = '\0';
+      *settings->directory.libretro = '\0';
+   *settings->directory.cursor = '\0';
+   *settings->directory.resampler = '\0';
+   *settings->directory.screenshot = '\0';
+   *settings->directory.system = '\0';
+   *settings->directory.cache = '\0';
+   *settings->directory.input_remapping = '\0';
+   *settings->directory.core_assets = '\0';
+   *settings->directory.assets = '\0';
+   *settings->directory.dynamic_wallpapers = '\0';
+   *settings->directory.thumbnails = '\0';
+   *settings->directory.playlist = '\0';
+   *settings->directory.autoconfig = '\0';
+#ifdef HAVE_MENU
+   *settings->directory.menu_content = '\0';
+   *settings->directory.menu_config = '\0';
+#endif
+   *settings->directory.video_shader = '\0';
+   *settings->directory.video_filter = '\0';
+   *settings->directory.audio_filter = '\0';
 
    if (!global->has_set.ups_pref)
       global->patch.ups_pref = false;
@@ -739,44 +762,27 @@ static void config_set_defaults(void)
    *global->record.output_dir = '\0';
    *global->record.config_dir = '\0';
 
+   *settings->path.core_options      = '\0';
+   *settings->path.content_history   = '\0';
+   *settings->path.cheat_settings    = '\0';
+   *settings->path.shader            = '\0';
+#ifndef IOS
+   *settings->path.bundle_assets_src = '\0';
+   *settings->path.bundle_assets_dst = '\0';
+   *settings->path.bundle_assets_dst_subdir = '\0';
+#endif
+   *settings->path.cheat_database    = '\0';
+   *settings->path.menu_wallpaper    = '\0';
+   *settings->path.content_database  = '\0';
+   *settings->path.overlay           = '\0';
+   *settings->path.softfilter_plugin = '\0';
+
    settings->bundle_assets_extract_version_current = 0;
    settings->bundle_assets_extract_last_version    = 0;
-#ifndef IOS
-   *settings->bundle_assets_src_path = '\0';
-   *settings->bundle_assets_dst_path = '\0';
-   *settings->bundle_assets_dst_path_subdir = '\0';
-#endif
    *settings->playlist_names = '\0';
    *settings->playlist_cores = '\0';
-   *settings->core_options_path = '\0';
-   *settings->content_history_path = '\0';
-   *settings->content_history_directory = '\0';
-   *settings->content_database = '\0';
-   *settings->cheat_database = '\0';
-   *settings->cursor_directory = '\0';
-   *settings->cheat_settings_path = '\0';
-   *settings->resampler_directory = '\0';
-   *settings->screenshot_directory = '\0';
-   *settings->system_directory = '\0';
-   *settings->cache_directory = '\0';
-   *settings->input_remapping_directory = '\0';
-   *settings->input.autoconfig_dir = '\0';
-   *settings->input.overlay = '\0';
-   *settings->core_assets_directory = '\0';
-   *settings->assets_directory = '\0';
-   *settings->dynamic_wallpapers_directory = '\0';
-   *settings->thumbnails_directory = '\0';
-   *settings->playlist_directory = '\0';
-   *settings->video.shader_path = '\0';
-   *settings->video.shader_dir = '\0';
-   *settings->video.filter_dir = '\0';
-   *settings->audio.filter_dir = '\0';
-   *settings->video.softfilter_plugin = '\0';
-   *settings->audio.dsp_plugin = '\0';
-#ifdef HAVE_MENU
-   *settings->menu_content_directory = '\0';
-   *settings->menu_config_directory = '\0';
-#endif
+   *settings->directory.content_history = '\0';
+   *settings->path.audio_dsp_plugin = '\0';
    settings->core_specific_config = default_core_specific_config;
    settings->game_specific_options = default_game_specific_options;
    settings->auto_overrides_enable = default_auto_overrides_enable;
@@ -799,61 +805,68 @@ static void config_set_defaults(void)
 
    video_driver_ctl(RARCH_DISPLAY_CTL_DEFAULT_SETTINGS, NULL);
 
+   if (*g_defaults.dir.wallpapers)
+      strlcpy(settings->directory.dynamic_wallpapers,
+            g_defaults.dir.wallpapers, sizeof(settings->directory.dynamic_wallpapers));
+   if (*g_defaults.dir.thumbnails)
+      strlcpy(settings->directory.thumbnails,
+            g_defaults.dir.thumbnails, sizeof(settings->directory.thumbnails));
+   if (*g_defaults.dir.remap)
+      strlcpy(settings->directory.input_remapping,
+            g_defaults.dir.remap, sizeof(settings->directory.input_remapping));
+   if (*g_defaults.dir.cache)
+      strlcpy(settings->directory.cache,
+            g_defaults.dir.cache, sizeof(settings->directory.cache));
+   if (*g_defaults.dir.assets)
+      strlcpy(settings->directory.assets,
+            g_defaults.dir.assets, sizeof(settings->directory.assets));
+   if (*g_defaults.dir.core_assets)
+      strlcpy(settings->directory.core_assets,
+            g_defaults.dir.core_assets, sizeof(settings->directory.core_assets));
+   if (*g_defaults.dir.playlist)
+      strlcpy(settings->directory.playlist,
+            g_defaults.dir.playlist, sizeof(settings->directory.playlist));
+   if (*g_defaults.dir.core)
+      fill_pathname_expand_special(settings->directory.libretro,
+            g_defaults.dir.core, sizeof(settings->directory.libretro));
+   if (*g_defaults.dir.audio_filter)
+      strlcpy(settings->directory.audio_filter,
+            g_defaults.dir.audio_filter, sizeof(settings->directory.audio_filter));
+   if (*g_defaults.dir.video_filter)
+      strlcpy(settings->directory.video_filter,
+            g_defaults.dir.video_filter, sizeof(settings->directory.video_filter));
+   if (*g_defaults.dir.shader)
+      fill_pathname_expand_special(settings->directory.video_shader,
+            g_defaults.dir.shader, sizeof(settings->directory.video_shader));
+
    if (*g_defaults.path.buildbot_server_url)
       strlcpy(settings->network.buildbot_url,
             g_defaults.path.buildbot_server_url, sizeof(settings->network.buildbot_url));
-   if (*g_defaults.dir.wallpapers)
-      strlcpy(settings->dynamic_wallpapers_directory,
-            g_defaults.dir.wallpapers, sizeof(settings->dynamic_wallpapers_directory));
-   if (*g_defaults.dir.remap)
-      strlcpy(settings->input_remapping_directory,
-            g_defaults.dir.remap, sizeof(settings->input_remapping_directory));
-   if (*g_defaults.dir.cache)
-      strlcpy(settings->cache_directory,
-            g_defaults.dir.cache, sizeof(settings->cache_directory));
-   if (*g_defaults.dir.audio_filter)
-      strlcpy(settings->audio.filter_dir,
-            g_defaults.dir.audio_filter, sizeof(settings->audio.filter_dir));
-   if (*g_defaults.dir.video_filter)
-      strlcpy(settings->video.filter_dir,
-            g_defaults.dir.video_filter, sizeof(settings->video.filter_dir));
-   if (*g_defaults.dir.assets)
-      strlcpy(settings->assets_directory,
-            g_defaults.dir.assets, sizeof(settings->assets_directory));
-   if (*g_defaults.dir.core_assets)
-      strlcpy(settings->core_assets_directory,
-            g_defaults.dir.core_assets, sizeof(settings->core_assets_directory));
-   if (*g_defaults.dir.playlist)
-      strlcpy(settings->playlist_directory,
-            g_defaults.dir.playlist, sizeof(settings->playlist_directory));
-   if (*g_defaults.dir.core)
-      fill_pathname_expand_special(settings->libretro_directory,
-            g_defaults.dir.core, sizeof(settings->libretro_directory));
    if (*g_defaults.path.core)
       runloop_ctl(RUNLOOP_CTL_SET_LIBRETRO_PATH, g_defaults.path.core);
    if (*g_defaults.dir.database)
-      strlcpy(settings->content_database, g_defaults.dir.database,
-            sizeof(settings->content_database));
+      strlcpy(settings->path.content_database, g_defaults.dir.database,
+            sizeof(settings->path.content_database));
    if (*g_defaults.dir.cursor)
-      strlcpy(settings->cursor_directory, g_defaults.dir.cursor,
-            sizeof(settings->cursor_directory));
+      strlcpy(settings->directory.cursor, g_defaults.dir.cursor,
+            sizeof(settings->directory.cursor));
    if (*g_defaults.dir.cheats)
-      strlcpy(settings->cheat_database, g_defaults.dir.cheats,
-            sizeof(settings->cheat_database));
+      strlcpy(settings->path.cheat_database, g_defaults.dir.cheats,
+            sizeof(settings->path.cheat_database));
    if (*g_defaults.dir.core_info)
-      fill_pathname_expand_special(settings->libretro_info_path,
-            g_defaults.dir.core_info, sizeof(settings->libretro_info_path));
+      fill_pathname_expand_special(settings->path.libretro_info,
+            g_defaults.dir.core_info, sizeof(settings->path.libretro_info));
 #ifdef HAVE_OVERLAY
    if (*g_defaults.dir.overlay)
    {
-      fill_pathname_expand_special(settings->overlay_directory,
-            g_defaults.dir.overlay, sizeof(settings->overlay_directory));
+      fill_pathname_expand_special(settings->directory.overlay,
+            g_defaults.dir.overlay, sizeof(settings->directory.overlay));
 #ifdef RARCH_MOBILE
-      if (!*settings->input.overlay)
-            fill_pathname_join(settings->input.overlay,
-                  settings->overlay_directory,
+      if (!*settings->path.overlay)
+            fill_pathname_join(settings->path.overlay,
+                  settings->directory.overlay,
                   "gamepads/retropad/retropad.cfg",
-                  sizeof(settings->input.overlay));
+                  sizeof(settings->path.overlay));
 #endif
    }
 
@@ -862,30 +875,27 @@ static void config_set_defaults(void)
       fill_pathname_expand_special(global->dir.osk_overlay,
             g_defaults.dir.osk_overlay, sizeof(global->dir.osk_overlay));
 #ifdef RARCH_MOBILE
-      if (!*settings->osk.overlay)
-            fill_pathname_join(settings->osk.overlay,
+      if (!*settings->path.osk_overlay)
+            fill_pathname_join(settings->path.osk_overlay,
                   global->dir.osk_overlay,
                   "keyboards/modular-keyboard/opaque/big.cfg",
-                  sizeof(settings->osk.overlay));
+                  sizeof(settings->path.osk_overlay));
 #endif
    }
    else
       strlcpy(global->dir.osk_overlay,
-            settings->overlay_directory, sizeof(global->dir.osk_overlay));
+            settings->directory.overlay, sizeof(global->dir.osk_overlay));
 #endif
 #ifdef HAVE_MENU
    if (*g_defaults.dir.menu_config)
-      strlcpy(settings->menu_config_directory,
+      strlcpy(settings->directory.menu_config,
             g_defaults.dir.menu_config,
-            sizeof(settings->menu_config_directory));
+            sizeof(settings->directory.menu_config));
 #endif
-   if (*g_defaults.dir.shader)
-      fill_pathname_expand_special(settings->video.shader_dir,
-            g_defaults.dir.shader, sizeof(settings->video.shader_dir));
    if (*g_defaults.dir.autoconfig)
-      strlcpy(settings->input.autoconfig_dir,
+      strlcpy(settings->directory.autoconfig,
             g_defaults.dir.autoconfig,
-            sizeof(settings->input.autoconfig_dir));
+            sizeof(settings->directory.autoconfig));
 
    if (!global->has_set.state_path && *g_defaults.dir.savestate)
       strlcpy(global->dir.savestate,
@@ -894,20 +904,20 @@ static void config_set_defaults(void)
       strlcpy(global->dir.savefile,
             g_defaults.dir.sram, sizeof(global->dir.savefile));
    if (*g_defaults.dir.system)
-      strlcpy(settings->system_directory,
-            g_defaults.dir.system, sizeof(settings->system_directory));
+      strlcpy(settings->directory.system,
+            g_defaults.dir.system, sizeof(settings->directory.system));
    if (*g_defaults.dir.screenshot)
-      strlcpy(settings->screenshot_directory,
+      strlcpy(settings->directory.screenshot,
             g_defaults.dir.screenshot,
-            sizeof(settings->screenshot_directory));
+            sizeof(settings->directory.screenshot));
    if (*g_defaults.dir.resampler)
-      strlcpy(settings->resampler_directory,
+      strlcpy(settings->directory.resampler,
             g_defaults.dir.resampler,
-            sizeof(settings->resampler_directory));
+            sizeof(settings->directory.resampler));
    if (*g_defaults.dir.content_history)
-      strlcpy(settings->content_history_directory,
+      strlcpy(settings->directory.content_history,
             g_defaults.dir.content_history,
-            sizeof(settings->content_history_directory));
+            sizeof(settings->directory.content_history));
 
    if (*g_defaults.path.config)
       fill_pathname_expand_special(global->path.config,
@@ -941,19 +951,10 @@ static void config_set_defaults(void)
  **/
 static config_file_t *open_default_config_file(void)
 {
+   char application_data[PATH_MAX_LENGTH];
    char conf_path[PATH_MAX_LENGTH] = {0};
    char app_path[PATH_MAX_LENGTH]  = {0};
-   const char *xdg                 = NULL;
-   const char *home                = NULL;
    config_file_t *conf             = NULL;
-   bool saved                      = false;
-   global_t *global                = global_get_ptr();
-
-   (void)conf_path;
-   (void)app_path;
-   (void)saved;
-   (void)xdg;
-   (void)home;
 
 #if defined(_WIN32) && !defined(_XBOX)
    fill_pathname_application_path(app_path, sizeof(app_path));
@@ -964,11 +965,10 @@ static config_file_t *open_default_config_file(void)
 
    if (!conf)
    {
-      const char *appdata = getenv("APPDATA");
-
-      if (appdata)
+      if (fill_pathname_application_data(application_data,
+            sizeof(application_data)))
       {
-         fill_pathname_join(conf_path, appdata,
+         fill_pathname_join(conf_path, application_data,
                "retroarch.cfg", sizeof(conf_path));
          conf = config_file_new(conf_path);
       }
@@ -976,8 +976,11 @@ static config_file_t *open_default_config_file(void)
 
    if (!conf)
    {
+      bool saved = false;
+
       /* Try to create a new config file. */
       conf = config_file_new(NULL);
+
 
       if (conf)
       {
@@ -1001,13 +1004,12 @@ static config_file_t *open_default_config_file(void)
       RARCH_WARN("Created new config file in: \"%s\".\n", conf_path);
    }
 #elif defined(OSX)
-   home = getenv("HOME");
-
-   if (!home)
+   if (!fill_pathname_application_data(application_data,
+            sizeof(application_data)))
       return NULL;
 
-   fill_pathname_join(conf_path, home,
-         "Library/Application Support/RetroArch", sizeof(conf_path));
+   fill_pathname_join(conf_path, application_data,
+         "RetroArch", sizeof(conf_path));
    path_mkdir(conf_path);
 
    fill_pathname_join(conf_path, conf_path,
@@ -1016,6 +1018,8 @@ static config_file_t *open_default_config_file(void)
 
    if (!conf)
    {
+      bool saved = false;
+
       conf = config_file_new(NULL);
 
       if (conf)
@@ -1036,102 +1040,85 @@ static config_file_t *open_default_config_file(void)
 
       RARCH_WARN("Created new config file in: \"%s\".\n", conf_path);
    }
-#elif !defined(__CELLOS_LV2__) && !defined(_XBOX)
-   xdg  = getenv("XDG_CONFIG_HOME");
-   home = getenv("HOME");
+#elif !defined(RARCH_CONSOLE)
+   bool has_application_data = fill_pathname_application_data(application_data,
+            sizeof(application_data));
 
-   /* XDG_CONFIG_HOME falls back to $HOME/.config. */
-   if (xdg)
-      fill_pathname_join(conf_path, xdg,
-            "retroarch/retroarch.cfg", sizeof(conf_path));
-   else if (home)
-#ifdef __HAIKU__
-      fill_pathname_join(conf_path, home,
-            "config/settings/retroarch/retroarch.cfg", sizeof(conf_path));
-#else
-      fill_pathname_join(conf_path, home,
-            ".config/retroarch/retroarch.cfg", sizeof(conf_path));
-#endif
-
-   if (xdg || home)
+   if (has_application_data)
    {
+      fill_pathname_join(conf_path, application_data,
+            "retroarch.cfg", sizeof(conf_path));
       RARCH_LOG("Looking for config in: \"%s\".\n", conf_path);
       conf = config_file_new(conf_path);
    }
 
    /* Fallback to $HOME/.retroarch.cfg. */
-   if (!conf && home)
+   if (!conf && getenv("HOME"))
    {
-      fill_pathname_join(conf_path, home,
+      fill_pathname_join(conf_path, getenv("HOME"),
             ".retroarch.cfg", sizeof(conf_path));
       RARCH_LOG("Looking for config in: \"%s\".\n", conf_path);
       conf = config_file_new(conf_path);
    }
 
-   if (!conf)
+   if (!conf && has_application_data)
    {
-      if (home || xdg)
+      char basedir[PATH_MAX_LENGTH] = {0};
+
+      /* Try to create a new config file. */
+
+      strlcpy(conf_path, application_data, sizeof(conf_path));
+
+      fill_pathname_basedir(basedir, conf_path, sizeof(basedir));
+
+      fill_pathname_join(conf_path, conf_path, "retroarch.cfg", sizeof(conf_path));
+
+      if (path_mkdir(basedir))
       {
-         char basedir[PATH_MAX_LENGTH] = {0};
+         bool saved                          = false;
+         char skeleton_conf[PATH_MAX_LENGTH] = {0};
 
-         /* Try to create a new config file. */
+         fill_pathname_join(skeleton_conf, GLOBAL_CONFIG_DIR,
+               "retroarch.cfg", sizeof(skeleton_conf));
+         conf = config_file_new(skeleton_conf);
+         if (conf)
+            RARCH_WARN("Config: using skeleton config \"%s\" as base for a new config file.\n", skeleton_conf);
+         else
+            conf = config_file_new(NULL);
 
-         /* XDG_CONFIG_HOME falls back to $HOME/.config. */
-         if (xdg)
-            fill_pathname_join(conf_path, xdg,
-                  "retroarch/retroarch.cfg", sizeof(conf_path));
-         else if (home)
-#ifdef __HAIKU__
-            fill_pathname_join(conf_path, home,
-                  "config/settings/retroarch/retroarch.cfg", sizeof(conf_path));
-#else
-         fill_pathname_join(conf_path, home,
-               ".config/retroarch/retroarch.cfg", sizeof(conf_path));
-#endif
-
-         fill_pathname_basedir(basedir, conf_path, sizeof(basedir));
-
-         if (path_mkdir(basedir))
+         if (conf)
          {
-            char skeleton_conf[PATH_MAX_LENGTH] = {0};
-
-            fill_pathname_join(skeleton_conf, GLOBAL_CONFIG_DIR,
-                  "retroarch.cfg", sizeof(skeleton_conf));
-            conf = config_file_new(skeleton_conf);
-            if (conf)
-               RARCH_WARN("Config: using skeleton config \"%s\" as base for a new config file.\n", skeleton_conf);
-            else
-               conf = config_file_new(NULL);
-
-            if (conf)
-            {
-               /* Since this is a clean config file, we can safely use config_save_on_exit. */
-               config_set_bool(conf, "config_save_on_exit", true);
-               saved = config_file_write(conf, conf_path);
-            }
-
-            if (!saved)
-            {
-               /* WARN here to make sure user has a good chance of seeing it. */
-               RARCH_ERR("Failed to create new config file in: \"%s\".\n", conf_path);
-               config_file_free(conf);
-
-               return NULL;
-            }
-
-            RARCH_WARN("Config: Created new config file in: \"%s\".\n", conf_path);
+            /* Since this is a clean config file, we can safely use config_save_on_exit. */
+            config_set_bool(conf, "config_save_on_exit", true);
+            saved = config_file_write(conf, conf_path);
          }
+
+         if (!saved)
+         {
+            /* WARN here to make sure user has a good chance of seeing it. */
+            RARCH_ERR("Failed to create new config file in: \"%s\".\n", conf_path);
+            config_file_free(conf);
+
+            return NULL;
+         }
+
+         RARCH_WARN("Config: Created new config file in: \"%s\".\n", conf_path);
       }
    }
 #endif
 
-   if (!conf)
-      return NULL;
+   (void)application_data;
+   (void)conf_path;
+   (void)app_path;
 
-   strlcpy(global->path.config, conf_path,
-         sizeof(global->path.config));
+   if (conf)
+   {
+      global_t *global = global_get_ptr();
+      strlcpy(global->path.config, conf_path, sizeof(global->path.config));
+      return conf;
+   }
 
-   return conf;
+   return NULL;
 }
 
 static void read_keybinds_keyboard(config_file_t *conf, unsigned user,
@@ -1368,9 +1355,9 @@ static bool config_load_file(const char *path, bool set_defaults)
    config_get_hex_base(conf, "menu_title_color",
          &settings->menu.title_color);
    config_get_path(conf, "menu_wallpaper",
-         settings->menu.wallpaper, sizeof(settings->menu.wallpaper));
-   if (string_is_equal(settings->menu.wallpaper, "default"))
-      *settings->menu.wallpaper = '\0';
+         settings->path.menu_wallpaper, sizeof(settings->path.menu_wallpaper));
+   if (string_is_equal(settings->path.menu_wallpaper, "default"))
+      *settings->path.menu_wallpaper = '\0';
 #endif
 
    CONFIG_GET_INT_BASE(conf, settings, video.hard_sync_frames, "video_hard_sync_frames");
@@ -1400,12 +1387,12 @@ static bool config_load_file(const char *path, bool set_defaults)
    CONFIG_GET_BOOL_BASE(conf,  settings, video.aspect_ratio_auto, "video_aspect_ratio_auto");
    CONFIG_GET_FLOAT_BASE(conf, settings, video.refresh_rate, "video_refresh_rate");
 
-   config_get_path(conf, "video_shader", settings->video.shader_path, sizeof(settings->video.shader_path));
+   config_get_path(conf, "video_shader", settings->path.shader, sizeof(settings->path.shader));
    CONFIG_GET_BOOL_BASE(conf, settings, video.shader_enable, "video_shader_enable");
 
    CONFIG_GET_BOOL_BASE(conf, settings, video.allow_rotate, "video_allow_rotate");
 
-   config_get_path(conf, "video_font_path", settings->video.font_path, sizeof(settings->video.font_path));
+   config_get_path(conf, "video_font_path", settings->path.font, sizeof(settings->path.font));
    CONFIG_GET_FLOAT_BASE(conf, settings, video.font_size, "video_font_size");
    CONFIG_GET_BOOL_BASE(conf, settings, video.font_enable, "video_font_enable");
    CONFIG_GET_FLOAT_BASE(conf, settings, video.msg_pos_x, "video_message_pos_x");
@@ -1441,17 +1428,16 @@ static bool config_load_file(const char *path, bool set_defaults)
    CONFIG_GET_BOOL_BASE(conf, settings, video.gpu_record, "video_gpu_record");
    CONFIG_GET_BOOL_BASE(conf, settings, video.gpu_screenshot, "video_gpu_screenshot");
 
-   config_get_path(conf, "video_shader_dir", settings->video.shader_dir, sizeof(settings->video.shader_dir));
-   if (string_is_equal(settings->video.shader_dir, "default"))
-      *settings->video.shader_dir = '\0';
+   if (string_is_equal(settings->directory.video_shader, "default"))
+      *settings->directory.video_shader = '\0';
 
-   config_get_path(conf, "video_filter_dir", settings->video.filter_dir, sizeof(settings->video.filter_dir));
-   if (string_is_equal(settings->video.filter_dir, "default"))
-      *settings->video.filter_dir = '\0';
+   config_get_path(conf, "video_filter_dir", settings->directory.video_filter, sizeof(settings->directory.video_filter));
+   if (string_is_equal(settings->directory.video_filter, "default"))
+      *settings->directory.video_filter = '\0';
 
-   config_get_path(conf, "audio_filter_dir", settings->audio.filter_dir, sizeof(settings->audio.filter_dir));
-   if (string_is_equal(settings->audio.filter_dir, "default"))
-      *settings->audio.filter_dir = '\0';
+   config_get_path(conf, "audio_filter_dir", settings->directory.audio_filter, sizeof(settings->directory.audio_filter));
+   if (string_is_equal(settings->directory.audio_filter, "default"))
+      *settings->directory.audio_filter = '\0';
 
    CONFIG_GET_BOOL_BASE(conf, settings, input.back_as_menu_toggle_enable, "back_as_menu_toggle_enable");
    CONFIG_GET_BOOL_BASE(conf, settings, input.remap_binds_enable, "input_remap_binds_enable");
@@ -1541,32 +1527,17 @@ static bool config_load_file(const char *path, bool set_defaults)
    CONFIG_GET_INT_BASE(conf, settings, menu.xmb_scale_factor, "xmb_scale_factor");
    CONFIG_GET_INT_BASE(conf, settings, menu.xmb_alpha_factor, "xmb_alpha_factor");
    CONFIG_GET_INT_BASE(conf, settings, menu.xmb_theme, "xmb_theme");
-   CONFIG_GET_BOOL_BASE(conf, settings, menu.xmb_shadows, "xmb_shadows");
+   CONFIG_GET_INT_BASE(conf, settings, menu.background_gradient, "menu_background_gradient");
+   CONFIG_GET_BOOL_BASE(conf, settings, menu.xmb_shadows_enable, "xmb_shadows_enable");
+   CONFIG_GET_INT_BASE(conf, settings, menu.shader_pipeline, "menu_shader_pipeline");
    config_get_path(conf, "xmb_font", settings->menu.xmb_font, sizeof(settings->menu.xmb_font));
 #endif
    config_get_array(conf, "video_context_driver", settings->video.context_driver, sizeof(settings->video.context_driver));
    config_get_array(conf, "audio_driver", settings->audio.driver, sizeof(settings->audio.driver));
-   config_get_path(conf, "video_filter", settings->video.softfilter_plugin, sizeof(settings->video.softfilter_plugin));
-   config_get_path(conf, "audio_dsp_plugin", settings->audio.dsp_plugin, sizeof(settings->audio.dsp_plugin));
    config_get_array(conf, "input_driver", settings->input.driver, sizeof(settings->input.driver));
    config_get_array(conf, "input_joypad_driver", settings->input.joypad_driver, sizeof(settings->input.joypad_driver));
    config_get_array(conf, "input_keyboard_layout", settings->input.keyboard_layout, sizeof(settings->input.keyboard_layout));
 
-#if 0
-   if (!global->has_set.libretro)
-      config_get_path(conf, "libretro_path", settings->libretro, sizeof(settings->libretro));
-#endif
-   if (!global->has_set.libretro_directory)
-      config_get_path(conf, "libretro_directory", settings->libretro_directory, sizeof(settings->libretro_directory));
-
-   /* Safe-guard against older behavior. */
-   if (path_is_directory(settings->libretro))
-   {
-      RARCH_WARN("\"libretro_path\" is a directory, using this for \"libretro_directory\" instead.\n");
-      strlcpy(settings->libretro_directory, settings->libretro,
-            sizeof(settings->libretro_directory));
-      *settings->libretro = '\0';
-   }
 
    CONFIG_GET_BOOL_BASE(conf, settings, ui.menubar_enable, "ui_menubar_enable");
    CONFIG_GET_BOOL_BASE(conf, settings, ui.suspend_screensaver_enable, "suspend_screensaver_enable");
@@ -1575,57 +1546,112 @@ static bool config_load_file(const char *path, bool set_defaults)
    CONFIG_GET_BOOL_BASE(conf, settings, multimedia.builtin_mediaplayer_enable, "builtin_mediaplayer_enable");
    CONFIG_GET_BOOL_BASE(conf, settings, multimedia.builtin_imageviewer_enable, "builtin_imageviewer_enable");
 
-   config_get_path(conf, "libretro_info_path", settings->libretro_info_path, sizeof(settings->libretro_info_path));
+#ifdef HAVE_OVERLAY
+   config_get_path(conf, "input_overlay", settings->path.overlay, sizeof(settings->path.overlay));
+   config_get_path(conf, "input_osk_overlay", settings->path.osk_overlay, sizeof(settings->path.osk_overlay));
+#endif
+   config_get_path(conf, "video_filter", settings->path.softfilter_plugin, sizeof(settings->path.softfilter_plugin));
+   config_get_path(conf, "audio_dsp_plugin", settings->path.audio_dsp_plugin, sizeof(settings->path.audio_dsp_plugin));
+   config_get_path(conf, "libretro_info_path", settings->path.libretro_info, sizeof(settings->path.libretro_info));
+   config_get_path(conf, "core_options_path", settings->path.core_options, sizeof(settings->path.core_options));
+   config_get_array(conf, "bundle_assets_src_path", settings->path.bundle_assets_src, sizeof(settings->path.bundle_assets_src));
+   config_get_array(conf, "bundle_assets_dst_path", settings->path.bundle_assets_dst, sizeof(settings->path.bundle_assets_dst));
+   config_get_array(conf, "bundle_assets_dst_path_subdir", settings->path.bundle_assets_dst_subdir, sizeof(settings->path.bundle_assets_dst_subdir));
 
-   config_get_path(conf, "core_options_path", settings->core_options_path, sizeof(settings->core_options_path));
-   config_get_path(conf, "screenshot_directory", settings->screenshot_directory, sizeof(settings->screenshot_directory));
-   if (*settings->screenshot_directory)
+   config_get_path(conf, "content_database_path",
+         settings->path.content_database, sizeof(settings->path.content_database));
+   config_get_path(conf, "cheat_database_path",
+         settings->path.cheat_database, sizeof(settings->path.cheat_database));
+   config_get_path(conf, "cursor_directory",
+         settings->directory.cursor, sizeof(settings->directory.cursor));
+   config_get_path(conf, "cheat_settings_path",
+         settings->path.cheat_settings, sizeof(settings->path.cheat_settings));
+   config_get_path(conf, "content_history_path", settings->path.content_history,
+         sizeof(settings->path.content_history));
+   if (string_is_empty(settings->path.content_history))
    {
-      if (string_is_equal(settings->screenshot_directory, "default"))
-         *settings->screenshot_directory = '\0';
-      else if (!path_is_directory(settings->screenshot_directory))
+      if (string_is_empty(settings->directory.content_history))
       {
-         RARCH_WARN("screenshot_directory is not an existing directory, ignoring ...\n");
-         *settings->screenshot_directory = '\0';
+         fill_pathname_resolve_relative(
+               settings->path.content_history,
+               global->path.config,
+               "content_history.lpl",
+               sizeof(settings->path.content_history));
+      }
+      else
+      {
+         fill_pathname_join(settings->path.content_history,
+               settings->directory.content_history,
+               "content_history.lpl",
+               sizeof(settings->path.content_history));
       }
    }
+
    CONFIG_GET_BOOL_BASE(conf, settings, auto_screenshot_filename, "auto_screenshot_filename");
 
-   config_get_path(conf, "resampler_directory", settings->resampler_directory,
-         sizeof(settings->resampler_directory));
-   config_get_path(conf, "cache_directory", settings->cache_directory,
-         sizeof(settings->cache_directory));
-   config_get_path(conf, "input_remapping_directory", settings->input_remapping_directory,
-         sizeof(settings->input_remapping_directory));
-   config_get_path(conf, "core_assets_directory", settings->core_assets_directory,
-         sizeof(settings->core_assets_directory));
-   config_get_path(conf, "assets_directory", settings->assets_directory,
-         sizeof(settings->assets_directory));
-   config_get_path(conf, "dynamic_wallpapers_directory", settings->dynamic_wallpapers_directory,
-         sizeof(settings->dynamic_wallpapers_directory));
-   config_get_path(conf, "thumbnails_directory", settings->thumbnails_directory,
-         sizeof(settings->thumbnails_directory));
-   config_get_path(conf, "playlist_directory", settings->playlist_directory,
-         sizeof(settings->playlist_directory));
-   if (string_is_equal(settings->core_assets_directory, "default"))
-      *settings->core_assets_directory = '\0';
-   if (string_is_equal(settings->assets_directory, "default"))
-      *settings->assets_directory = '\0';
-   if (string_is_equal(settings->dynamic_wallpapers_directory, "default"))
-      *settings->dynamic_wallpapers_directory = '\0';
-   if (string_is_equal(settings->thumbnails_directory, "default"))
-      *settings->thumbnails_directory = '\0';
-   if (string_is_equal(settings->playlist_directory, "default"))
-      *settings->playlist_directory = '\0';
+   config_get_path(conf, "screenshot_directory", settings->directory.screenshot, sizeof(settings->directory.screenshot));
+   if (*settings->directory.screenshot)
+   {
+      if (string_is_equal(settings->directory.screenshot, "default"))
+         *settings->directory.screenshot = '\0';
+      else if (!path_is_directory(settings->directory.screenshot))
+      {
+         RARCH_WARN("screenshot_directory is not an existing directory, ignoring ...\n");
+         *settings->directory.screenshot = '\0';
+      }
+   }
+
+   config_get_path(conf,
+         "video_shader_dir",
+         settings->directory.video_shader,
+         sizeof(settings->directory.video_shader));
+   if (!global->has_set.libretro_directory)
+      config_get_path(conf, "libretro_directory", settings->directory.libretro, sizeof(settings->directory.libretro));
+
+   /* Safe-guard against older behavior. */
+   if (path_is_directory(settings->path.libretro))
+   {
+      RARCH_WARN("\"libretro_path\" is a directory, using this for \"libretro_directory\" instead.\n");
+      strlcpy(settings->directory.libretro, settings->path.libretro,
+            sizeof(settings->directory.libretro));
+      *settings->path.libretro = '\0';
+   }
+
+   config_get_path(conf, "resampler_directory", settings->directory.resampler,
+         sizeof(settings->directory.resampler));
+   config_get_path(conf, "cache_directory", settings->directory.cache,
+         sizeof(settings->directory.cache));
+   config_get_path(conf, "input_remapping_directory", settings->directory.input_remapping,
+         sizeof(settings->directory.input_remapping));
+   config_get_path(conf, "core_assets_directory", settings->directory.core_assets,
+         sizeof(settings->directory.core_assets));
+   config_get_path(conf, "assets_directory", settings->directory.assets,
+         sizeof(settings->directory.assets));
+   config_get_path(conf, "dynamic_wallpapers_directory", settings->directory.dynamic_wallpapers,
+         sizeof(settings->directory.dynamic_wallpapers));
+   config_get_path(conf, "thumbnails_directory", settings->directory.thumbnails,
+         sizeof(settings->directory.thumbnails));
+   config_get_path(conf, "playlist_directory", settings->directory.playlist,
+         sizeof(settings->directory.playlist));
+   if (string_is_equal(settings->directory.core_assets, "default"))
+      *settings->directory.core_assets = '\0';
+   if (string_is_equal(settings->directory.assets, "default"))
+      *settings->directory.assets = '\0';
+   if (string_is_equal(settings->directory.dynamic_wallpapers, "default"))
+      *settings->directory.dynamic_wallpapers = '\0';
+   if (string_is_equal(settings->directory.thumbnails, "default"))
+      *settings->directory.thumbnails = '\0';
+   if (string_is_equal(settings->directory.playlist, "default"))
+      *settings->directory.playlist = '\0';
 #ifdef HAVE_MENU
-   config_get_path(conf, "rgui_browser_directory", settings->menu_content_directory,
-         sizeof(settings->menu_content_directory));
-   if (string_is_equal(settings->menu_content_directory, "default"))
-      *settings->menu_content_directory = '\0';
-   config_get_path(conf, "rgui_config_directory", settings->menu_config_directory,
-         sizeof(settings->menu_config_directory));
-   if (string_is_equal(settings->menu_config_directory, "default"))
-      *settings->menu_config_directory = '\0';
+   config_get_path(conf, "rgui_browser_directory", settings->directory.menu_content,
+         sizeof(settings->directory.menu_content));
+   if (string_is_equal(settings->directory.menu_content, "default"))
+      *settings->directory.menu_content = '\0';
+   config_get_path(conf, "rgui_config_directory", settings->directory.menu_config,
+         sizeof(settings->directory.menu_config));
+   if (string_is_equal(settings->directory.menu_config, "default"))
+      *settings->directory.menu_config = '\0';
    CONFIG_GET_BOOL_BASE(conf, settings, menu_show_start_screen, "rgui_show_start_screen");
 #endif
    CONFIG_GET_INT_BASE(conf, settings, libretro_log_level, "libretro_log_level");
@@ -1664,11 +1690,10 @@ static bool config_load_file(const char *path, bool set_defaults)
          sizeof(global->record.config_dir));
 
 #ifdef HAVE_OVERLAY
-   config_get_path(conf, "overlay_directory", settings->overlay_directory, sizeof(settings->overlay_directory));
-   if (string_is_equal(settings->overlay_directory, "default"))
-      *settings->overlay_directory = '\0';
+   config_get_path(conf, "overlay_directory", settings->directory.overlay, sizeof(settings->directory.overlay));
+   if (string_is_equal(settings->directory.overlay, "default"))
+      *settings->directory.overlay = '\0';
 
-   config_get_path(conf, "input_overlay", settings->input.overlay, sizeof(settings->input.overlay));
    CONFIG_GET_BOOL_BASE(conf, settings, input.overlay_enable, "input_overlay_enable");
    CONFIG_GET_BOOL_BASE(conf, settings, input.overlay_enable_autopreferred, "input_overlay_enable_autopreferred");
    CONFIG_GET_BOOL_BASE(conf, settings, input.overlay_hide_in_menu, "input_overlay_hide_in_menu");
@@ -1679,7 +1704,6 @@ static bool config_load_file(const char *path, bool set_defaults)
    if (string_is_equal(global->dir.osk_overlay, "default"))
       *global->dir.osk_overlay = '\0';
 
-   config_get_path(conf, "input_osk_overlay", settings->osk.overlay, sizeof(settings->osk.overlay));
    CONFIG_GET_BOOL_BASE(conf, settings, osk.enable, "input_osk_overlay_enable");
 #endif
 
@@ -1695,9 +1719,6 @@ static bool config_load_file(const char *path, bool set_defaults)
    CONFIG_GET_BOOL_BASE(conf, settings, bundle_assets_extract_enable, "bundle_assets_extract_enable");
    CONFIG_GET_INT_BASE(conf, settings, bundle_assets_extract_version_current, "bundle_assets_extract_version_current");
    CONFIG_GET_INT_BASE(conf, settings, bundle_assets_extract_last_version,    "bundle_assets_extract_last_version");
-   config_get_array(conf, "bundle_assets_src_path", settings->bundle_assets_src_path, sizeof(settings->bundle_assets_src_path));
-   config_get_array(conf, "bundle_assets_dst_path", settings->bundle_assets_dst_path, sizeof(settings->bundle_assets_dst_path));
-   config_get_array(conf, "bundle_assets_dst_path_subdir", settings->bundle_assets_dst_path_subdir, sizeof(settings->bundle_assets_dst_path_subdir));
 
    CONFIG_GET_INT_BASE(conf, settings, rewind_granularity, "rewind_granularity");
    CONFIG_GET_FLOAT_BASE(conf, settings, slowmotion_ratio, "slowmotion_ratio");
@@ -1714,14 +1735,6 @@ static bool config_load_file(const char *path, bool set_defaults)
    CONFIG_GET_BOOL_BASE(conf, settings, pause_nonactive, "pause_nonactive");
    CONFIG_GET_INT_BASE(conf, settings, autosave_interval, "autosave_interval");
 
-   config_get_path(conf, "content_database_path",
-         settings->content_database, sizeof(settings->content_database));
-   config_get_path(conf, "cheat_database_path",
-         settings->cheat_database, sizeof(settings->cheat_database));
-   config_get_path(conf, "cursor_directory",
-         settings->cursor_directory, sizeof(settings->cursor_directory));
-   config_get_path(conf, "cheat_settings_path",
-         settings->cheat_settings_path, sizeof(settings->cheat_settings_path));
 
    CONFIG_GET_BOOL_BASE(conf, settings, block_sram_overwrite, "block_sram_overwrite");
    CONFIG_GET_BOOL_BASE(conf, settings, savestate_auto_index, "savestate_auto_index");
@@ -1754,13 +1767,11 @@ static bool config_load_file(const char *path, bool set_defaults)
 
    CONFIG_GET_BOOL_BASE(conf, settings, debug_panel_enable, "debug_panel_enable");
 
-   config_get_path(conf, "content_history_dir", settings->content_history_directory,
-         sizeof(settings->content_history_directory));
+   config_get_path(conf, "content_history_dir", settings->directory.content_history,
+         sizeof(settings->directory.content_history));
 
    CONFIG_GET_BOOL_BASE(conf, settings, history_list_enable, "history_list_enable");
 
-   config_get_path(conf, "content_history_path", settings->content_history_path,
-         sizeof(settings->content_history_path));
    CONFIG_GET_INT_BASE(conf, settings, content_history_size, "content_history_size");
 
    CONFIG_GET_INT_BASE(conf, settings, input.turbo_period, "input_turbo_period");
@@ -1768,7 +1779,7 @@ static bool config_load_file(const char *path, bool set_defaults)
 
    CONFIG_GET_BOOL_BASE(conf, settings, input.autodetect_enable, "input_autodetect_enable");
    config_get_path(conf, "joypad_autoconfig_dir",
-         settings->input.autoconfig_dir, sizeof(settings->input.autoconfig_dir));
+         settings->directory.autoconfig, sizeof(settings->directory.autoconfig));
 
    if (!rarch_ctl(RARCH_CTL_HAS_SET_USERNAME, NULL))
       config_get_path(conf, "netplay_nickname",  settings->username, sizeof(settings->username));
@@ -1827,34 +1838,18 @@ static bool config_load_file(const char *path, bool set_defaults)
          RARCH_WARN("savestate_directory is not a directory, ignoring ...\n");
    }
 
-   if (string_is_empty(settings->content_history_path))
-   {
-      if (string_is_empty(settings->content_history_directory))
-      {
-         fill_pathname_resolve_relative(settings->content_history_path,
-               global->path.config, "content_history.lpl",
-               sizeof(settings->content_history_path));
-      }
-      else
-      {
-         fill_pathname_join(settings->content_history_path,
-               settings->content_history_directory,
-               "content_history.lpl",
-               sizeof(settings->content_history_path));
-      }
-   }
 
    if (!config_get_path(conf, "system_directory",
-            settings->system_directory, sizeof(settings->system_directory)))
+            settings->directory.system, sizeof(settings->directory.system)))
    {
       RARCH_WARN("SYSTEM DIR is empty, assume CONTENT DIR\n");
-      *settings->system_directory = '\0';
+      *settings->directory.system = '\0';
    }
 
-   if (string_is_equal(settings->system_directory, "default"))
+   if (string_is_equal(settings->directory.system, "default"))
    {
       RARCH_WARN("SYSTEM DIR is empty, assume CONTENT DIR\n");
-      *settings->system_directory = '\0';
+      *settings->directory.system = '\0';
    }
 
    config_read_keybinds_conf(conf);
@@ -1887,7 +1882,7 @@ static void config_load_core_specific(void)
 
    *global->path.core_specific_config = '\0';
 
-   if (!*settings->libretro)
+   if (!*settings->path.libretro)
       return;
 #ifdef HAVE_DYNAMIC
    if (rarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL))
@@ -1895,12 +1890,12 @@ static void config_load_core_specific(void)
 #endif
 
 #ifdef HAVE_MENU
-   if (*settings->menu_config_directory)
+   if (*settings->directory.menu_config)
    {
-      path_resolve_realpath(settings->menu_config_directory,
-            sizeof(settings->menu_config_directory));
+      path_resolve_realpath(settings->directory.menu_config,
+            sizeof(settings->directory.menu_config));
       strlcpy(global->path.core_specific_config,
-            settings->menu_config_directory,
+            settings->directory.menu_config,
             sizeof(global->path.core_specific_config));
    }
    else
@@ -1911,7 +1906,7 @@ static void config_load_core_specific(void)
             global->path.config, sizeof(global->path.core_specific_config));
    }
 
-   fill_pathname_dir(global->path.core_specific_config, settings->libretro,
+   fill_pathname_dir(global->path.core_specific_config, settings->path.libretro,
          ".cfg", sizeof(global->path.core_specific_config));
 
    if (settings->core_specific_config)
@@ -1922,7 +1917,7 @@ static void config_load_core_specific(void)
       global->has_set.save_path = false;
       global->has_set.state_path = false;
 
-      strlcpy(tmp, settings->libretro, sizeof(tmp));
+      strlcpy(tmp, settings->path.libretro, sizeof(tmp));
       RARCH_LOG("Config: loading core-specific config from: %s.\n",
             global->path.core_specific_config);
 
@@ -1931,7 +1926,7 @@ static void config_load_core_specific(void)
 
       /* Force some parameters which are implied when using core specific configs.
        * Don't have the core config file overwrite the libretro path. */
-      strlcpy(settings->libretro, tmp, sizeof(settings->libretro));
+      strlcpy(settings->path.libretro, tmp, sizeof(settings->path.libretro));
 
       /* This must be true for core specific configs. */
       settings->core_specific_config = true;
@@ -1985,9 +1980,10 @@ bool config_load_override(void)
    /* Config directory: config_directory.
     * Try config directory setting first,
     * fallback to the location of the current configuration file. */
-   if (!string_is_empty(settings->menu_config_directory))
+   if (!string_is_empty(settings->directory.menu_config))
       strlcpy(config_directory,
-            settings->menu_config_directory, sizeof(config_directory));
+            settings->directory.menu_config,
+            sizeof(config_directory));
    else if (!string_is_empty(global->path.config))
       fill_pathname_basedir(config_directory,
             global->path.config, sizeof(config_directory));
@@ -2069,7 +2065,7 @@ bool config_load_override(void)
 #endif
 
    /* Store the libretro_path we're using since it will be overwritten by the override when reloading */
-   strlcpy(buf, settings->libretro, sizeof(buf));
+   strlcpy(buf, settings->path.libretro, sizeof(buf));
 
    /* Toggle has_save_path to false so it resets */
    global->has_set.save_path  = false;
@@ -2080,7 +2076,7 @@ bool config_load_override(void)
 
    /* Restore the libretro_path we're using
     * since it will be overwritten by the override when reloading. */
-   strlcpy(settings->libretro, buf, sizeof(settings->libretro));
+   strlcpy(settings->path.libretro, buf, sizeof(settings->path.libretro));
    runloop_msg_queue_push("Configuration override loaded", 1, 100, true);
 
    /* Reset save paths */
@@ -2164,11 +2160,12 @@ bool config_load_remap(void)
 
    /* Remap directory: remap_directory.
     * Try remap directory setting, no fallbacks defined */
-   if (string_is_empty(settings->input_remapping_directory))
+   if (string_is_empty(settings->directory.input_remapping))
       return false;
 
    strlcpy(remap_directory,
-         settings->input_remapping_directory, sizeof(remap_directory));
+         settings->directory.input_remapping,
+         sizeof(remap_directory));
    RARCH_LOG("Remaps: remap directory: %s\n", remap_directory);
 
    /* Concatenate strings into full paths for core_path, game_path */
@@ -2485,7 +2482,7 @@ bool config_save_autoconf_profile(const char *path, unsigned user)
    config_file_t *conf                  = NULL;
    settings_t *settings                 = config_get_ptr();
 
-   fill_pathname_join(buf, settings->input.autoconfig_dir,
+   fill_pathname_join(buf, settings->directory.autoconfig,
          settings->input.joypad_driver, sizeof(buf));
 
    if(path_is_directory(buf))
@@ -2496,7 +2493,7 @@ bool config_save_autoconf_profile(const char *path, unsigned user)
    }
    else
    {
-      fill_pathname_join(buf, settings->input.autoconfig_dir,
+      fill_pathname_join(buf, settings->directory.autoconfig,
             path, sizeof(buf));
       fill_pathname_noext(autoconf_file, buf, ".cfg", sizeof(autoconf_file));
    }
@@ -2582,27 +2579,41 @@ bool config_save_file(const char *path)
          settings->multimedia.builtin_imageviewer_enable);
    config_set_bool(conf,  "fps_show", settings->fps_show);
    config_set_bool(conf,  "ui_menubar_enable", settings->ui.menubar_enable);
-#if 0
-   config_set_path(conf,  "libretro_path", settings->libretro);
-#endif
-   config_set_path(conf,  "core_options_path", settings->core_options_path);
+
 
    config_set_path(conf,  "recording_output_directory", global->record.output_dir);
    config_set_path(conf,  "recording_config_directory", global->record.config_dir);
 
    config_set_bool(conf,  "suspend_screensaver_enable", settings->ui.suspend_screensaver_enable);
-   config_set_path(conf,  "libretro_directory", settings->libretro_directory);
-   config_set_path(conf,  "libretro_info_path", settings->libretro_info_path);
-   config_set_path(conf,  "content_database_path", settings->content_database);
-   config_set_path(conf,  "cheat_database_path", settings->cheat_database);
-   config_set_path(conf,  "cursor_directory", settings->cursor_directory);
-   config_set_path(conf,  "content_history_dir", settings->content_history_directory);
+   config_set_path(conf,  "libretro_directory", settings->directory.libretro);
+
+   config_set_path(conf,  "core_options_path", settings->path.core_options);
+   config_set_path(conf,  "libretro_info_path", settings->path.libretro_info);
+   config_set_path(conf,  "video_shader", settings->path.shader);
+   config_set_string(conf,  "bundle_assets_src_path", settings->path.bundle_assets_src);
+   config_set_string(conf,  "bundle_assets_dst_path", settings->path.bundle_assets_dst);
+   config_set_string(conf,  "bundle_assets_dst_path_subdir", settings->path.bundle_assets_dst_subdir);
+   config_set_path(conf,  "content_database_path", settings->path.content_database);
+   config_set_path(conf,  "cheat_database_path", settings->path.cheat_database);
+#ifdef HAVE_MENU
+   config_set_path(conf, "menu_wallpaper", settings->path.menu_wallpaper);
+#endif
+   config_set_string(conf, "video_filter", settings->path.softfilter_plugin);
+   config_set_string(conf, "audio_dsp_plugin", settings->path.audio_dsp_plugin);
+   config_set_path(conf, "content_history_path", settings->path.content_history);
+#ifdef HAVE_OVERLAY
+   config_set_path(conf, "input_overlay", settings->path.overlay);
+   config_set_path(conf, "input_osk_overlay", settings->path.osk_overlay);
+#endif
+   config_set_path(conf, "video_font_path", settings->path.font);
+
+   config_set_path(conf,  "cursor_directory", settings->directory.cursor);
+   config_set_path(conf,  "content_history_dir", settings->directory.content_history);
    config_set_bool(conf,  "rewind_enable", settings->rewind_enable);
    config_set_int(conf,   "audio_latency", settings->audio.latency);
    config_set_bool(conf,  "audio_sync",    settings->audio.sync);
    config_set_int(conf,   "audio_block_frames", settings->audio.block_frames);
    config_set_int(conf,   "rewind_granularity", settings->rewind_granularity);
-   config_set_path(conf,  "video_shader", settings->video.shader_path);
    config_set_bool(conf,  "video_shader_enable",
          settings->video.shader_enable);
    config_set_float(conf, "video_aspect_ratio", settings->video.aspect_ratio);
@@ -2627,9 +2638,6 @@ bool config_save_file(const char *path)
    config_set_bool(conf,  "bundle_assets_extract_enable", settings->bundle_assets_extract_enable);
    config_set_int(conf,  "bundle_assets_extract_version_current", settings->bundle_assets_extract_version_current);
    config_set_int(conf,  "bundle_assets_extract_last_version", settings->bundle_assets_extract_last_version);
-   config_set_string(conf,  "bundle_assets_src_path", settings->bundle_assets_src_path);
-   config_set_string(conf,  "bundle_assets_dst_path", settings->bundle_assets_dst_path);
-   config_set_string(conf,  "bundle_assets_dst_path_subdir", settings->bundle_assets_dst_path_subdir);
    config_set_string(conf,  "playlist_names", settings->playlist_names);
    config_set_string(conf,  "playlist_cores", settings->playlist_cores);
    config_set_float(conf, "video_refresh_rate", settings->video.refresh_rate);
@@ -2660,8 +2668,9 @@ bool config_save_file(const char *path)
    config_set_bool(conf,"menu_dynamic_wallpaper_enable",
          settings->menu.dynamic_wallpaper_enable);
    config_set_int(conf,"menu_thumbnails", settings->menu.thumbnails);
-   config_set_path(conf, "menu_wallpaper", settings->menu.wallpaper);
 #endif
+
+
    config_set_bool(conf,  "video_vsync", settings->video.vsync);
    config_set_bool(conf,  "video_hard_sync", settings->video.hard_sync);
    config_set_int(conf,   "video_hard_sync_frames",
@@ -2676,14 +2685,12 @@ bool config_save_file(const char *path)
    config_set_bool(conf, "video_gpu_screenshot", settings->video.gpu_screenshot);
    config_set_int(conf, "video_rotation", settings->video.rotation);
    config_set_path(conf, "screenshot_directory",
-         *settings->screenshot_directory ?
-         settings->screenshot_directory : "default");
+         *settings->directory.screenshot ?
+         settings->directory.screenshot : "default");
    config_set_bool(conf, "auto_screenshot_filename",
          settings->auto_screenshot_filename);
    config_set_int(conf, "aspect_ratio_index", settings->video.aspect_ratio_idx);
    config_set_string(conf, "audio_device", settings->audio.device);
-   config_set_string(conf, "video_filter", settings->video.softfilter_plugin);
-   config_set_string(conf, "audio_dsp_plugin", settings->audio.dsp_plugin);
    config_set_string(conf, "core_updater_buildbot_url",
          settings->network.buildbot_url);
    config_set_string(conf, "core_updater_buildbot_assets_url",
@@ -2731,57 +2738,68 @@ bool config_save_file(const char *path)
       config_set_bool(conf, "ips_pref", global->patch.ips_pref);
 
    config_set_path(conf, "system_directory",
-         *settings->system_directory ?
-         settings->system_directory : "default");
+         *settings->directory.system ?
+         settings->directory.system : "default");
    config_set_path(conf, "cache_directory",
-         settings->cache_directory);
+         settings->directory.cache);
    config_set_path(conf, "input_remapping_directory",
-         settings->input_remapping_directory);
+         settings->directory.input_remapping);
    config_set_path(conf, "resampler_directory",
-         settings->resampler_directory);
+         settings->directory.resampler);
+   config_set_path(conf, "video_shader_dir",
+         *settings->directory.video_shader ?
+         settings->directory.video_shader : "default");
+   config_set_path(conf, "video_filter_dir",
+         *settings->directory.video_filter ?
+         settings->directory.video_filter : "default");
+   config_set_path(conf, "core_assets_directory",
+         *settings->directory.core_assets ?
+         settings->directory.core_assets : "default");
+   config_set_path(conf, "assets_directory",
+         *settings->directory.assets ?
+         settings->directory.assets : "default");
+   config_set_path(conf, "dynamic_wallpapers_directory",
+         *settings->directory.dynamic_wallpapers ?
+         settings->directory.dynamic_wallpapers : "default");
+   config_set_path(conf, "thumbnails_directory",
+         *settings->directory.thumbnails ?
+         settings->directory.thumbnails : "default");
+   config_set_path(conf, "playlist_directory",
+         *settings->directory.playlist ?
+         settings->directory.playlist : "default");
+#ifdef HAVE_MENU
+   config_set_path(conf, "rgui_browser_directory",
+         *settings->directory.menu_content ?
+         settings->directory.menu_content : "default");
+   config_set_path(conf, "rgui_config_directory",
+         *settings->directory.menu_config ?
+         settings->directory.menu_config : "default");
+#endif
+   config_set_path(conf, "joypad_autoconfig_dir",
+         settings->directory.autoconfig);
+#ifdef HAVE_OVERLAY
+   config_set_path(conf, "overlay_directory",
+         *settings->directory.overlay ? settings->directory.overlay : "default");
+#endif
+   config_set_path(conf, "audio_filter_dir",
+         *settings->directory.audio_filter ?
+         settings->directory.audio_filter : "default");
+
    config_set_string(conf, "audio_resampler", settings->audio.resampler);
    config_set_path(conf, "savefile_directory",
          *global->dir.savefile ? global->dir.savefile : "default");
    config_set_path(conf, "savestate_directory",
          *global->dir.savestate ? global->dir.savestate : "default");
-   config_set_path(conf, "video_shader_dir",
-         *settings->video.shader_dir ?
-         settings->video.shader_dir : "default");
-   config_set_path(conf, "video_filter_dir",
-         *settings->video.filter_dir ?
-         settings->video.filter_dir : "default");
-   config_set_path(conf, "audio_filter_dir",
-         *settings->audio.filter_dir ?
-         settings->audio.filter_dir : "default");
 
-   config_set_path(conf, "core_assets_directory",
-         *settings->core_assets_directory ?
-         settings->core_assets_directory : "default");
-   config_set_path(conf, "assets_directory",
-         *settings->assets_directory ?
-         settings->assets_directory : "default");
-   config_set_path(conf, "dynamic_wallpapers_directory",
-         *settings->dynamic_wallpapers_directory ?
-         settings->dynamic_wallpapers_directory : "default");
-   config_set_path(conf, "thumbnails_directory",
-         *settings->thumbnails_directory ?
-         settings->thumbnails_directory : "default");
-   config_set_path(conf, "playlist_directory",
-         *settings->playlist_directory ?
-         settings->playlist_directory : "default");
 #ifdef HAVE_MENU
    config_set_int(conf, "xmb_scale_factor", settings->menu.xmb_scale_factor);
    config_set_int(conf, "xmb_alpha_factor", settings->menu.xmb_alpha_factor);
    config_set_int(conf, "xmb_theme", settings->menu.xmb_theme);
-   config_set_bool(conf, "xmb_shadows", settings->menu.xmb_shadows);
+   config_set_int(conf, "menu_background_gradient", settings->menu.background_gradient);
+   config_set_bool(conf, "xmb_shadows_enable", settings->menu.xmb_shadows_enable);
+   config_set_int(conf, "menu_shader_pipeline", settings->menu.shader_pipeline);
    config_set_path(conf, "xmb_font",
          !string_is_empty(settings->menu.xmb_font) ? settings->menu.xmb_font : "");
-   config_set_path(conf, "rgui_browser_directory",
-         *settings->menu_content_directory ?
-         settings->menu_content_directory : "default");
-   config_set_path(conf, "rgui_config_directory",
-         *settings->menu_config_directory ?
-         settings->menu_config_directory : "default");
    config_set_bool(conf, "rgui_show_start_screen",
          settings->menu_show_start_screen);
    config_set_bool(conf, "menu_navigation_wraparound_enable",
@@ -2799,17 +2817,11 @@ bool config_save_file(const char *path)
          settings->menu.title_color);
 #endif
 
-   config_set_path(conf, "content_history_path", settings->content_history_path);
    config_set_int(conf, "content_history_size", settings->content_history_size);
-   config_set_path(conf, "joypad_autoconfig_dir",
-         settings->input.autoconfig_dir);
    config_set_bool(conf, "input_autodetect_enable",
          settings->input.autodetect_enable);
 
 #ifdef HAVE_OVERLAY
-   config_set_path(conf, "overlay_directory",
-         *settings->overlay_directory ? settings->overlay_directory : "default");
-   config_set_path(conf, "input_overlay", settings->input.overlay);
    config_set_bool(conf, "input_overlay_enable", settings->input.overlay_enable);
    config_set_bool(conf, "input_overlay_enable_autopreferred", settings->input.overlay_enable_autopreferred);
    config_set_bool(conf, "input_overlay_hide_in_menu", settings->input.overlay_hide_in_menu);
@@ -2820,11 +2832,10 @@ bool config_save_file(const char *path)
 
    config_set_path(conf, "osk_overlay_directory",
          *global->dir.osk_overlay ? global->dir.osk_overlay : "default");
-   config_set_path(conf, "input_osk_overlay", settings->osk.overlay);
    config_set_bool(conf, "input_osk_overlay_enable", settings->osk.enable);
 #endif
 
-   config_set_path(conf, "video_font_path", settings->video.font_path);
+
    config_set_float(conf, "video_message_pos_x", settings->video.msg_pos_x);
    config_set_float(conf, "video_message_pos_y", settings->video.msg_pos_y);
 

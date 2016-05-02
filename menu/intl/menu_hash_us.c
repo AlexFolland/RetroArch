@@ -300,8 +300,12 @@ static const char *menu_hash_to_str_us_label(uint32_t hash)
          return "xmb_font";
       case MENU_LABEL_XMB_THEME:
          return "xmb_theme";
-      case MENU_LABEL_XMB_SHADOWS:
-         return "xmb_shadows";
+      case MENU_LABEL_XMB_GRADIENT:
+         return "xmb_gradient";
+      case MENU_LABEL_XMB_SHADOWS_ENABLE:
+         return "xmb_shadows_enable";
+      case MENU_LABEL_XMB_RIBBON_ENABLE:
+         return "xmb_ribbon_enable";
       case MENU_LABEL_XMB_SCALE_FACTOR:
          return "xmb_scale_factor";
       case MENU_LABEL_XMB_ALPHA_FACTOR:
@@ -616,6 +620,8 @@ static const char *menu_hash_to_str_us_label(uint32_t hash)
          return "take_screenshot";
       case MENU_LABEL_CORE_UPDATER_LIST:
          return "core_updater_list";
+      case MENU_LABEL_THUMBNAILS_UPDATER_LIST:
+         return "thumbnails_updater_list";
       case MENU_LABEL_CORE_UPDATER_BUILDBOT_URL:
          return "core_updater_buildbot_url";
       case MENU_LABEL_BUILDBOT_ASSETS_URL:
@@ -704,6 +710,8 @@ static const char *menu_hash_to_str_us_label(uint32_t hash)
          return "deferred_video_filter";
       case MENU_LABEL_DEFERRED_CORE_UPDATER_LIST:
          return "core_updater";
+      case MENU_LABEL_DEFERRED_THUMBNAILS_UPDATER_LIST:
+         return "deferred_thumbnails_updater_list";
       case MENU_LABEL_AUDIO_DSP_PLUGIN:
          return "audio_dsp_plugin";
       case MENU_LABEL_UPDATE_ASSETS:
@@ -746,6 +754,8 @@ const char *menu_hash_to_str_us(uint32_t hash)
 
    switch (hash)
    {
+      case MENU_LABEL_VALUE_THUMBNAILS_UPDATER_LIST:
+         return "Thumbnails Updater";
       case MENU_LABEL_VALUE_MENU_LINEAR_FILTER:
          return "Menu Linear Filter";
       case MENU_LABEL_VALUE_MENU_THROTTLE_FRAMERATE:
@@ -1058,8 +1068,12 @@ const char *menu_hash_to_str_us(uint32_t hash)
          return "XMB Font";
       case MENU_LABEL_VALUE_XMB_THEME:
          return "XMB Theme";
-      case MENU_LABEL_VALUE_XMB_SHADOWS:
-         return "XMB Shadows";
+      case MENU_LABEL_VALUE_XMB_GRADIENT:
+         return "XMB Gradient";
+      case MENU_LABEL_VALUE_XMB_SHADOWS_ENABLE:
+         return "XMB Shadows Enable";
+      case MENU_LABEL_VALUE_XMB_RIBBON_ENABLE:
+         return "Menu Shader Pipeline";
       case MENU_LABEL_VALUE_SUSPEND_SCREENSAVER_ENABLE:
          return "Suspend Screensaver";
       case MENU_LABEL_VALUE_VIDEO_DISABLE_COMPOSITION:
